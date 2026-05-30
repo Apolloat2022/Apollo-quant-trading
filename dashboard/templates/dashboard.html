@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quant Trading Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #c9d1d9; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+      --blue: #58a6ff; --muted: #8b949e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; }
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+    }
+    header h1 { font-size: 1.2rem; color: var(--blue); }
+    #status { font-size: 0.8rem; color: var(--muted); }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px; text-align: center;
+    }
+    .card .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 6px; }
+    .card.buy .value { color: var(--green); }
+    .card.sell .value { color: var(--red); }
+    .card.hold .value { color: var(--yellow); }
+    .card.total .value { color: var(--blue); }
+    .card.conf .value { color: var(--text); }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px;
+    }
+    .chart-card h3 { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+    .backtest-section {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 20px; margin-bottom: 24px;
+    }
+    .backtest-section h2 { font-size: 1rem; margin-bottom: 14px; color: var(--blue); }
+    .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+    .form-row label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 4px; }
+    .form-row input, .form-row select {
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 0.85rem; min-width: 120px;
+    }
+    button {
+      background: var(--blue); color: #fff; border: none;
+      border-radius: 6px; padding: 9px 18px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+    }
+    button:hover { opacity: 0.85; }
+    #bt-results { margin-top: 12px; font-size: 0.85rem; }
+    .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .result-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+    .result-item .k { font-size: 0.72rem; color: var(--muted); }
+    .result-item .v { font-size: 1.1rem; font-weight: 700; margin-top: 3px; }
+    .signals-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .signals-table th { background: var(--surface); color: var(--muted); padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    .signals-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .signals-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 12px;
+      font-size: 0.73rem; font-weight: 700; letter-spacing: 0.04em;
+    }
+    .badge.BUY  { background: rgba(63,185,80,0.15); color: var(--green); }
+    .badge.SELL { background: rgba(248,81,73,0.15);  color: var(--red); }
+    .badge.HOLD { background: rgba(210,153,34,0.15); color: var(--yellow); }
+    .conf-bar { background: var(--border); border-radius: 4px; height: 6px; width: 80px; display: inline-block; vertical-align: middle; }
+    .conf-fill { background: var(--blue); border-radius: 4px; height: 6px; }
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .table-header { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
+    .table-header h2 { font-size: 1rem; color: var(--blue); }
+    #signal-count { font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⚡ Quant Trading Dashboard</h1>
+  <span id="status">Connecting…</span>
+</header>
+
+<div class="container">
+  <!-- Metric Cards -->
+  <div class="metrics">
+    <div class="card total"><div class="label">Total Signals</div><div class="value" id="m-total">0</div></div>
+    <div class="card buy">  <div class="label">BUY</div><div class="value" id="m-buy">0</div></div>
+    <div class="card sell"> <div class="label">SELL</div><div class="value" id="m-sell">0</div></div>
+    <div class="card hold"> <div class="label">HOLD</div><div class="value" id="m-hold">0</div></div>
+    <div class="card conf"> <div class="label">Avg Confidence</div><div class="value" id="m-conf">0%</div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts">
+    <div class="chart-card"><h3>Signal Distribution</h3><div id="pie-chart" style="height:260px"></div></div>
+    <div class="chart-card"><h3>Confidence by Symbol</h3><div id="bar-chart" style="height:260px"></div></div>
+  </div>
+
+  <!-- Backtest Panel -->
+  <div class="backtest-section">
+    <h2>📈 Backtest Strategy</h2>
+    <div class="form-row">
+      <div><label>Symbol</label><input id="bt-sym" value="AAPL" placeholder="AAPL / BTC/USDT / EURUSD=X" style="min-width:200px" /></div>
+      <div><label>Asset Type</label>
+        <select id="bt-type" onchange="updateSymbolHint()">
+          <option value="stock">Stock</option>
+          <option value="crypto">Crypto</option>
+          <option value="forex">Forex</option>
+        </select>
+      </div>
+      <div><label>Strategy</label>
+        <select id="bt-strat">
+          <option value="combined">Combined</option>
+          <option value="momentum">Momentum</option>
+        </select>
+      </div>
+      <div><label>Capital ($)</label><input id="bt-cap" type="number" value="10000" min="1000" /></div>
+      <div><button onclick="runBacktest()">Run Backtest</button></div>
+      <div><button onclick="compareStrategies()" style="background:#3fb950">Compare All</button></div>
+    </div>
+    <div id="bt-results"></div>
+  </div>
+
+  <!-- Signals Table -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <h2>Live Signals</h2>
+      <span id="signal-count">0 signals</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="signals-table">
+        <thead>
+          <tr>
+            <th>Time</th><th>Symbol</th><th>Signal</th><th>Strategy</th>
+            <th>Price</th><th>Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="signals-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const socket = io();
+  let allSignals = [];
+
+  socket.on('connect', () => { document.getElementById('status').textContent = '🟢 Live'; });
+  socket.on('disconnect', () => { document.getElementById('status').textContent = '🔴 Disconnected'; });
+
+  socket.on('initial_signals', (signals) => {
+    allSignals = signals;
+    renderAll();
+  });
+
+  socket.on('new_signal', (signal) => {
+    allSignals.unshift(signal);
+    if (allSignals.length > 500) allSignals.pop();
+    renderAll();
+  });
+
+  function renderAll() {
+    renderMetrics();
+    renderCharts();
+    renderTable();
+  }
+
+  function renderMetrics() {
+    const total = allSignals.length;
+    const buys  = allSignals.filter(s => s.signal === 'BUY').length;
+    const sells = allSignals.filter(s => s.signal === 'SELL').length;
+    const holds = total - buys - sells;
+    const avg   = total ? allSignals.reduce((a, s) => a + (s.confidence || 0), 0) / total : 0;
+
+    document.getElementById('m-total').textContent = total;
+    document.getElementById('m-buy').textContent   = buys;
+    document.getElementById('m-sell').textContent  = sells;
+    document.getElementById('m-hold').textContent  = holds;
+    document.getElementById('m-conf').textContent  = (avg * 100).toFixed(1) + '%';
+  }
+
+  function renderCharts() {
+    const buys  = allSignals.filter(s => s.signal === 'BUY').length;
+    const sells = allSignals.filter(s => s.signal === 'SELL').length;
+    const holds = allSignals.filter(s => s.signal === 'HOLD').length;
+
+    Plotly.react('pie-chart', [{
+      type: 'pie', labels: ['BUY','SELL','HOLD'], values: [buys, sells, holds],
+      marker: { colors: ['#3fb950','#f85149','#d29922'] },
+      textinfo: 'label+percent', hole: 0.4,
+    }], {
+      paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+      font: { color: '#c9d1d9', size: 12 },
+      showlegend: false, margin: { t: 10, b: 10, l: 10, r: 10 },
+    });
+
+    const symMap = {};
+    allSignals.forEach(s => {
+      if (!symMap[s.symbol]) symMap[s.symbol] = [];
+      symMap[s.symbol].push(s.confidence || 0);
+    });
+    const syms  = Object.keys(symMap).slice(0, 15);
+    const confs = syms.map(k => symMap[k].reduce((a, v) => a + v, 0) / symMap[k].length);
+
+    Plotly.react('bar-chart', [{
+      type: 'bar', x: syms, y: confs.map(v => +(v * 100).toFixed(1)),
+      marker: { color: '#58a6ff' },
+    }], {
+      paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+      font: { color: '#c9d1d9', size: 11 },
+      margin: { t: 10, b: 60, l: 40, r: 10 },
+      yaxis: { title: 'Confidence %', gridcolor: '#30363d' },
+      xaxis: { gridcolor: '#30363d' },
+    });
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('signals-tbody');
+    document.getElementById('signal-count').textContent = allSignals.length + ' signals';
+
+    const rows = allSignals.slice(0, 100).map(s => {
+      const ts   = s.timestamp ? new Date(s.timestamp).toLocaleTimeString() : '–';
+      const conf = (s.confidence || 0) * 100;
+      return `<tr>
+        <td style="color:var(--muted)">${ts}</td>
+        <td><b>${s.symbol || '–'}</b></td>
+        <td><span class="badge ${s.signal}">${s.signal}</span></td>
+        <td>${s.strategy || '–'}</td>
+        <td>${(s.price || 0).toFixed(4)}</td>
+        <td>
+          <span class="conf-bar"><span class="conf-fill" style="width:${conf}%"></span></span>
+          &nbsp;${conf.toFixed(0)}%
+        </td>
+      </tr>`;
+    });
+    tbody.innerHTML = rows.join('');
+  }
+
+  async function runBacktest() {
+    const btn = event.target;
+    btn.textContent = 'Running…'; btn.disabled = true;
+    document.getElementById('bt-results').innerHTML = '<span style="color:var(--muted)">Fetching data and running backtest…</span>';
+    try {
+      const resp = await fetch('/api/backtest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol:    document.getElementById('bt-sym').value,
+          asset_type:document.getElementById('bt-type').value,
+          strategy:  document.getElementById('bt-strat').value,
+          capital:   parseFloat(document.getElementById('bt-cap').value),
+        }),
+      });
+      const data = await resp.json();
+      if (data.error) { document.getElementById('bt-results').innerHTML = `<span style="color:var(--red)">${data.error}</span>`; return; }
+      const color = r => parseFloat(r) >= 0 ? 'var(--green)' : 'var(--red)';
+      document.getElementById('bt-results').innerHTML = `
+        <div class="result-grid">
+          <div class="result-item"><div class="k">Total Return</div><div class="v" style="color:${color(data.total_return)}">${(data.total_return*100).toFixed(2)}%</div></div>
+          <div class="result-item"><div class="k">Win Rate</div><div class="v">${(data.win_rate*100).toFixed(1)}%</div></div>
+          <div class="result-item"><div class="k">Sharpe Ratio</div><div class="v" style="color:${color(data.sharpe)}">${data.sharpe}</div></div>
+          <div class="result-item"><div class="k">Max Drawdown</div><div class="v" style="color:var(--red)">${(data.max_drawdown*100).toFixed(2)}%</div></div>
+          <div class="result-item"><div class="k">Profit Factor</div><div class="v">${data.profit_factor}</div></div>
+          <div class="result-item"><div class="k">Total Trades</div><div class="v">${data.total_trades}</div></div>
+        </div>`;
+    } catch(e) {
+      document.getElementById('bt-results').innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+    } finally { btn.textContent = 'Run Backtest'; btn.disabled = false; }
+  }
+
+  async function compareStrategies() {
+    const btn = event.target;
+    btn.textContent = 'Comparing…'; btn.disabled = true;
+    document.getElementById('bt-results').innerHTML = '<span style="color:var(--muted)">Comparing all strategies…</span>';
+    try {
+      const resp = await fetch('/api/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol:    document.getElementById('bt-sym').value,
+          asset_type:document.getElementById('bt-type').value,
+          capital:   parseFloat(document.getElementById('bt-cap').value),
+        }),
+      });
+      const data = await resp.json();
+      if (data.error) { document.getElementById('bt-results').innerHTML = `<span style="color:var(--red)">${data.error}</span>`; return; }
+      const color = r => parseFloat(r) >= 0 ? 'var(--green)' : 'var(--red)';
+      const rows = Object.entries(data.comparison).map(([name, m]) =>
+        `<tr>
+          <td><b>${name}</b></td>
+          <td style="color:${color(m.total_return)}">${(m.total_return*100).toFixed(2)}%</td>
+          <td>${(m.win_rate*100).toFixed(1)}%</td>
+          <td style="color:${color(m.sharpe)}">${m.sharpe}</td>
+          <td style="color:var(--red)">${(m.max_drawdown*100).toFixed(2)}%</td>
+          <td>${m.total_trades}</td>
+        </tr>`).join('');
+      document.getElementById('bt-results').innerHTML = `
+        <table class="signals-table" style="margin-top:8px">
+          <thead><tr><th>Strategy</th><th>Return</th><th>Win Rate</th><th>Sharpe</th><th>Max DD</th><th>Trades</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    } catch(e) {
+      document.getElementById('bt-results').innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+    } finally { btn.textContent = 'Compare All'; btn.disabled = false; }
+  }
+
+  function updateSymbolHint() {
+    const type = document.getElementById('bt-type').value;
+    const hints = { stock: 'AAPL', crypto: 'BTC/USDT', forex: 'EURUSD=X' };
+    document.getElementById('bt-sym').placeholder = hints[type] || 'AAPL';
+    document.getElementById('bt-sym').value = hints[type] || 'AAPL';
+  }
+
+  // Initial data load via REST
+  fetch('/api/signals?limit=100').then(r => r.json()).then(s => { allSignals = s; renderAll(); });
+  fetch('/api/metrics').then(r => r.json()).then(m => {
+    document.getElementById('m-total').textContent = m.total_signals;
+    document.getElementById('m-buy').textContent   = m.buy_count;
+    document.getElementById('m-sell').textContent  = m.sell_count;
+    document.getElementById('m-hold').textContent  = m.hold_count;
+    document.getElementById('m-conf').textContent  = (m.avg_confidence * 100).toFixed(1) + '%';
+  });
+</script>
+</body>
+</html>
