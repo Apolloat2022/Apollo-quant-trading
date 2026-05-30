@@ -1,3 +1,3 @@
-from .app import app, socketio, add_signal, run_dashboard
+from .app import app, add_signal, run_dashboard
 
-__all__ = ["app", "socketio", "add_signal", "run_dashboard"]
+__all__ = ["app", "add_signal", "run_dashboard"]
