@@ -106,9 +106,12 @@ def api_backtest():
         capital    = float(body.get("capital", 10_000))
         strategy   = body.get("strategy", "combined")
 
-        from data_fetcher import fetch_asset
-        from strategies.advanced_strategies import combined_strategy, momentum_strategy
-        from backtest.engine import BacktestEngine
+        try:
+            from data_fetcher import fetch_asset
+            from strategies.advanced_strategies import combined_strategy, momentum_strategy
+            from backtest.engine import BacktestEngine
+        except ImportError:
+            return jsonify({"error": "Backtesting requires the full local installation. Run: python main_complete.py --mode backtest"}), 503
 
         df = fetch_asset(symbol, asset_type, timeframe="1h", period="180d")
         if df is None or df.empty:
@@ -141,12 +144,15 @@ def api_compare():
         asset_type = body.get("asset_type", "stock")
         capital    = float(body.get("capital", 10_000))
 
-        from data_fetcher import fetch_asset
-        from strategies.advanced_strategies import (
-            combined_strategy, momentum_strategy,
-            mean_reversion_strategy, volume_price_strategy,
-        )
-        from backtest.engine import BacktestEngine
+        try:
+            from data_fetcher import fetch_asset
+            from strategies.advanced_strategies import (
+                combined_strategy, momentum_strategy,
+                mean_reversion_strategy, volume_price_strategy,
+            )
+            from backtest.engine import BacktestEngine
+        except ImportError:
+            return jsonify({"error": "Backtesting requires the full local installation. Run: python main_complete.py --mode backtest"}), 503
 
         df = fetch_asset(symbol, asset_type, timeframe="1h", period="180d")
         if df is None or df.empty:
