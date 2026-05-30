@@ -27,6 +27,13 @@ MAX_SIGNALS = 200  # rolling window kept in KV
 
 
 def run() -> None:
+    # Debug — log presence of credentials without exposing values
+    url_len   = len(os.environ.get("UPSTASH_REDIS_REST_URL",   ""))
+    token_len = len(os.environ.get("UPSTASH_REDIS_REST_TOKEN", ""))
+    logger.info(f"UPSTASH_REDIS_REST_URL   length: {url_len}")
+    logger.info(f"UPSTASH_REDIS_REST_TOKEN length: {token_len}")
+    logger.info(f"KV_AVAILABLE: {KV_AVAILABLE}")
+
     if not KV_AVAILABLE:
         logger.error("UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN not set — add them as GitHub repository secrets.")
         sys.exit(1)
