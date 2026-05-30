@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Quant Trading Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <style>
     :root {
       --bg: #0d1117; --surface: #161b22; --border: #30363d;
@@ -82,7 +81,7 @@
 <body>
 <header>
   <h1>⚡ Quant Trading Dashboard</h1>
-  <span id="status">Connecting…</span>
+  <span id="status">Loading…</span>
 </header>
 
 <div class="container">
@@ -147,43 +146,43 @@
 </div>
 
 <script>
-  const socket = io();
   let allSignals = [];
 
-  socket.on('connect', () => { document.getElementById('status').textContent = '🟢 Live'; });
-  socket.on('disconnect', () => { document.getElementById('status').textContent = '🔴 Disconnected'; });
+  // ── Data fetching (polls every 30 s) ──────────────────────
+  async function fetchAll() {
+    try {
+      const [sigRes, metRes] = await Promise.all([
+        fetch('/api/signals?limit=100'),
+        fetch('/api/metrics'),
+      ]);
+      allSignals = await sigRes.json();
+      const m = await metRes.json();
 
-  socket.on('initial_signals', (signals) => {
-    allSignals = signals;
-    renderAll();
-  });
+      document.getElementById('m-total').textContent = m.total_signals;
+      document.getElementById('m-buy').textContent   = m.buy_count;
+      document.getElementById('m-sell').textContent  = m.sell_count;
+      document.getElementById('m-hold').textContent  = m.hold_count;
+      document.getElementById('m-conf').textContent  = (m.avg_confidence * 100).toFixed(1) + '%';
 
-  socket.on('new_signal', (signal) => {
-    allSignals.unshift(signal);
-    if (allSignals.length > 500) allSignals.pop();
-    renderAll();
-  });
+      if (m.last_scan) {
+        const secs = Math.round((Date.now() - new Date(m.last_scan)) / 1000);
+        const ago  = secs < 60 ? `${secs}s ago` : `${Math.round(secs/60)}m ago`;
+        document.getElementById('status').textContent = `Last scan: ${ago}`;
+      } else {
+        document.getElementById('status').textContent = 'Live (no scan yet)';
+      }
 
-  function renderAll() {
-    renderMetrics();
-    renderCharts();
-    renderTable();
+      renderCharts();
+      renderTable();
+    } catch (e) {
+      document.getElementById('status').textContent = 'Error — retrying…';
+    }
   }
 
-  function renderMetrics() {
-    const total = allSignals.length;
-    const buys  = allSignals.filter(s => s.signal === 'BUY').length;
-    const sells = allSignals.filter(s => s.signal === 'SELL').length;
-    const holds = total - buys - sells;
-    const avg   = total ? allSignals.reduce((a, s) => a + (s.confidence || 0), 0) / total : 0;
+  fetchAll();
+  setInterval(fetchAll, 30_000);
 
-    document.getElementById('m-total').textContent = total;
-    document.getElementById('m-buy').textContent   = buys;
-    document.getElementById('m-sell').textContent  = sells;
-    document.getElementById('m-hold').textContent  = holds;
-    document.getElementById('m-conf').textContent  = (avg * 100).toFixed(1) + '%';
-  }
-
+  // ── Charts ────────────────────────────────────────────────
   function renderCharts() {
     const buys  = allSignals.filter(s => s.signal === 'BUY').length;
     const sells = allSignals.filter(s => s.signal === 'SELL').length;
@@ -219,10 +218,9 @@
     });
   }
 
+  // ── Signals table ─────────────────────────────────────────
   function renderTable() {
-    const tbody = document.getElementById('signals-tbody');
     document.getElementById('signal-count').textContent = allSignals.length + ' signals';
-
     const rows = allSignals.slice(0, 100).map(s => {
       const ts   = s.timestamp ? new Date(s.timestamp).toLocaleTimeString() : '–';
       const conf = (s.confidence || 0) * 100;
@@ -238,9 +236,10 @@
         </td>
       </tr>`;
     });
-    tbody.innerHTML = rows.join('');
+    document.getElementById('signals-tbody').innerHTML = rows.join('');
   }
 
+  // ── Backtest ──────────────────────────────────────────────
   async function runBacktest() {
     const btn = event.target;
     btn.textContent = 'Running…'; btn.disabled = true;
@@ -250,10 +249,10 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          symbol:    document.getElementById('bt-sym').value,
-          asset_type:document.getElementById('bt-type').value,
-          strategy:  document.getElementById('bt-strat').value,
-          capital:   parseFloat(document.getElementById('bt-cap').value),
+          symbol:     document.getElementById('bt-sym').value,
+          asset_type: document.getElementById('bt-type').value,
+          strategy:   document.getElementById('bt-strat').value,
+          capital:    parseFloat(document.getElementById('bt-cap').value),
         }),
       });
       const data = await resp.json();
@@ -282,9 +281,9 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          symbol:    document.getElementById('bt-sym').value,
-          asset_type:document.getElementById('bt-type').value,
-          capital:   parseFloat(document.getElementById('bt-cap').value),
+          symbol:     document.getElementById('bt-sym').value,
+          asset_type: document.getElementById('bt-type').value,
+          capital:    parseFloat(document.getElementById('bt-cap').value),
         }),
       });
       const data = await resp.json();
@@ -310,21 +309,11 @@
   }
 
   function updateSymbolHint() {
-    const type = document.getElementById('bt-type').value;
     const hints = { stock: 'AAPL', crypto: 'BTC/USDT', forex: 'EURUSD=X' };
+    const type  = document.getElementById('bt-type').value;
     document.getElementById('bt-sym').placeholder = hints[type] || 'AAPL';
-    document.getElementById('bt-sym').value = hints[type] || 'AAPL';
+    document.getElementById('bt-sym').value        = hints[type] || 'AAPL';
   }
-
-  // Initial data load via REST
-  fetch('/api/signals?limit=100').then(r => r.json()).then(s => { allSignals = s; renderAll(); });
-  fetch('/api/metrics').then(r => r.json()).then(m => {
-    document.getElementById('m-total').textContent = m.total_signals;
-    document.getElementById('m-buy').textContent   = m.buy_count;
-    document.getElementById('m-sell').textContent  = m.sell_count;
-    document.getElementById('m-hold').textContent  = m.hold_count;
-    document.getElementById('m-conf').textContent  = (m.avg_confidence * 100).toFixed(1) + '%';
-  });
 </script>
 </body>
 </html>
