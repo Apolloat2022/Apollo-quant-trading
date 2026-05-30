@@ -22,7 +22,7 @@ logger = logging.getLogger("scanner_job")
 from trading_engine_v2 import TradingEngine
 from kv_store import kv_get, kv_set, KV_AVAILABLE
 
-CAPITAL     = float(os.environ.get("CAPITAL", "10000"))
+CAPITAL     = float(os.environ.get("CAPITAL") or "10000")
 MAX_SIGNALS = 200  # rolling window kept in KV
 
 
