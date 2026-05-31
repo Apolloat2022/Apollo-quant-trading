@@ -1,68 +1,14 @@
-I want to create a high-fidelity, premium web interface for an algorithmic trading platform based on a provided conceptual design. The goal is to build a modern, dark mode landing page hero section that looks cinematic and professional. I need the HTML, CSS, and any necessary JavaScript to recreate this visual layout and its interactions. Here are the detailed requirements:
+I am reviewing the layout for the Apollo Quant Trading application and there is a structural responsiveness issue across both mobile and desktop views.
 
-1. Overall Context & Background
-Context: The interface should be framed within a dark browser window environment (simulating an app experience).
+On mobile, the feature cards are constrained to the left side, while the disclaimer text is floating out of place on the right.
+On desktop, there is an unintended side by side split. The main content is trapped in the left half of the screen, while the disclaimer text is floating in an empty right half.
 
-Aesthetic: Dark mode, high-tech, cinematic. Use "glassmorphic" (frosted glass) effects, glowing cyan/neon accents, and 3D icons.
+Please update the component to fix these views. Make the following structural adjustments:
 
-Main Background: A blurred, out-of-focus background of modern server racks in a data center.
+Vertical Flow: The main page wrapper must be a vertical stack on all screen sizes. Remove any responsive row based flex properties or multi column grid classes that are forcing the side by side layout on larger screens.
 
-Content Layer: Overlaid on the data center image, create a large, semi-transparent frosted glass card container that houses all the central UI elements.
+Desktop Centering: Center the main content container horizontally on the screen. Use auto margins along with a reasonable maximum width to ensure the app sits centered in the middle of the desktop viewport.
 
-Background Visualization (Within the Card): At the bottom of the card, integrate a subtle, glowing 3D geometric data grid heatmap (like the one shown in image_3.png) with cells in green, yellow, and orange, receding into perspective.
+Mobile Scaling: The main wrapper must take up the full width on mobile screens instead of retaining a fixed desktop width. Force the layout to stack vertically on small breakpoints and only expand the inner cards to multiple columns on medium or large screens.
 
-2. Card Header (Central Content)
-Logo: A stylized icon of a 3D shield containing a lightning bolt (cyan and white).
-
-Title: "Apollo Quant Trading" (Large, bold, white text).
-
-Subtitle: "AI BUY/SELL signals across stocks, crypto, forex, 14+ assets." (Grey text).
-
-Badge: Below the subtitle, a small, subtle grey oval badge with the text: "7-day free trial — no credit card required".
-
-3. Features Grid
-Create a 2x2 grid of four feature panels.
-
-Each panel should be a distinct frosted glass card with a subtle border.
-
-3a. Top-Left: "Live Signals" (Active/Hover State)
-Icon: A detailed, premium 3D graphic of a rising bar chart (gold/white).
-
-Title: "Live Signals"
-
-Description: "BUY/SELL signals with confidence scoring across 14+ assets, updated every 5 mins."
-
-Crucial Detail: This panel must represent the state when a mouse hovers over it. The entire card must have a continuous, vibrant, glowing cyan border and halo effect. A default white mouse cursor should be positioned within this card to confirm the interaction state.
-
-3b. Top-Right: "4 Strategies"
-Icon: An intricate 3D complex gear/fractal emblem (brushed silver).
-
-Title: "4 Strategies"
-
-Description: "Momentum, Ichimoku, Mean Reversion & Volume-Price run in parallel."
-
-3c. Bottom-Left: "Risk Management"
-Icon: A premium 3D silver shield with a detailed padlock emblem.
-
-Title: "Risk Management"
-
-Description: "Automated position sizing, stop-loss & drawdown protection per trade."
-
-3d. Bottom-Right: "AI Market Summaries"
-Icon: An advanced 3D neural network graph visualization (silver and cyan).
-
-Title: "AI Market Summaries"
-
-Description: "AI market summaries generated via Gemini."
-
-4. Call to Action (Below Grid)
-Primary Button: A large, rounded button with a rich, vibrant gradient fill transitioning from cyan (top-left) to violet/purple (bottom-right). The button should have a soft, pulsing outer glow. Text: "Start free 7-day trial →" (White text).
-
-Secondary Text: Below the button: "Already have an account? Sign in" (Grey text, with "Sign in" underlined).
-
-5. Code & Implementation Notes
-Focus on semantic HTML, efficient CSS (CSS Grid, Flexbox, backdrop-filters for glassmorphism), and ensure all text copy is correct verbatim from the description and image.
-
-Generate SVG placeholder graphics or use detailed CSS descriptions for the icons (I will provide high-fidelity assets later).
-
-The interaction (hover states for feature cards) must be implemented with smooth transitions.
+Footer Repositioning: Move the disclaimer text and links to the bottom of the normal vertical document flow. It should sit completely below the main application content and be centered horizontally on all devices.
