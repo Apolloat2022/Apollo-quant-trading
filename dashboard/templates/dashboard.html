@@ -19,11 +19,12 @@
       --blue: #58a6ff; --cyan: #22d3ee; --violet: #a855f7; --muted: #8b949e;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
+    html, body { min-height: 100%; }
     body {
       background: #03070e; color: var(--text);
       font-family: 'Inter','Segoe UI',system-ui,sans-serif;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;            /* never allow horizontal scroll */
     }
 
     /* ════════ ANIMATIONS ════════ */
@@ -37,12 +38,21 @@
     /* ════════ LANDING ════════ */
     #auth-overlay {
       position: fixed; inset: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: center;
-      padding: 32px 18px; overflow-y: auto;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      padding: 24px 16px; overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
       background:
         radial-gradient(ellipse 70% 50% at 50% 8%, rgba(34,211,238,.10) 0%, transparent 55%),
         radial-gradient(ellipse 60% 45% at 80% 90%, rgba(168,85,247,.10) 0%, transparent 55%),
         #03070e;
+    }
+    /* margin:auto on the single stack child centers vertically when it fits and
+       falls back to top-aligned + scrollable when taller — avoids the iOS Safari
+       flexbox clipping bug. Stacking card + footer in a column wrapper also
+       stops them rendering side-by-side. */
+    .lp-stack {
+      margin: auto; width: 100%; max-width: 940px;
+      display: flex; flex-direction: column; align-items: center; z-index: 2;
     }
 
     /* Blurred data-center server racks */
@@ -182,8 +192,10 @@
     #paywall-overlay {
       position: fixed; inset: 0; z-index: 100;
       background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(34,211,238,.08) 0%, #03070e 60%);
-      display: flex; align-items: center; justify-content: center; padding: 20px;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 20px; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
     }
+    .paywall-card { margin: auto; }
     .paywall-card {
       background: rgba(12,18,28,.96); border: 1px solid rgba(34,211,238,.15);
       border-radius: 20px; padding: 44px 38px; max-width: 430px; width: 100%;
@@ -289,8 +301,11 @@
     }
     @media (max-width: 420px) {
       .glass-card { padding: 26px 16px 0; }
+      .heatmap { margin: 24px -16px 0; height: 80px; }
       .gc-cta { font-size: 0.96rem; padding: 15px 20px; }
+      .gc-title { font-size: 1.5rem; }
       .metrics { grid-template-columns: 1fr 1fr; }
+      .lp-footer p { font-size: 0.62rem; }
     }
   </style>
 </head>
@@ -306,6 +321,7 @@
   </div>
   <div class="dc-vignette" aria-hidden="true"></div>
 
+  <div class="lp-stack">
   <div class="glass-card">
 
     <!-- Header -->
@@ -408,6 +424,7 @@
        performance is not indicative of future results.</p>
     <div><a href="/terms">Terms of Service</a><a href="/privacy">Privacy Policy</a></div>
   </footer>
+  </div><!-- /lp-stack -->
 </div>
 
 <!-- ════════ PAYWALL ════════ -->
