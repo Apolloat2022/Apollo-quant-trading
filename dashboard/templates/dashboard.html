@@ -282,21 +282,24 @@
     if (clerkInstance.user) {
       await onSignedIn();
     } else {
-      clerkInstance.addListener(({ user }) => { if (user) onSignedIn(); });
+      // Poll every second for sign-in (catches redirect-back after auth)
+      const poll = setInterval(async () => {
+        if (clerkInstance.user) {
+          clearInterval(poll);
+          await onSignedIn();
+        }
+      }, 1000);
     }
   }
 
   function clerkSignUp() {
-    clerkInstance.openSignUp({
-      afterSignUpUrl: window.location.href,
-      afterSignInUrl: window.location.href,
-    });
+    if (!clerkInstance) return;
+    clerkInstance.redirectToSignUp({ afterSignUpUrl: window.location.href });
   }
 
   function clerkSignIn() {
-    clerkInstance.openSignIn({
-      afterSignInUrl: window.location.href,
-    });
+    if (!clerkInstance) return;
+    clerkInstance.redirectToSignIn({ afterSignInUrl: window.location.href });
   }
 
   async function onSignedIn() {
