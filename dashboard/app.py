@@ -55,10 +55,18 @@ def _read_signals(limit: int = 100) -> list[dict]:
 
 @app.route("/api/debug")
 def api_debug():
-    import os
-    url_len   = len(os.environ.get("UPSTASH_REDIS_REST_URL",   "").strip("\"'"))
-    token_len = len(os.environ.get("UPSTASH_REDIS_REST_TOKEN", "").strip("\"'"))
-    return jsonify({"kv_available": KV_AVAILABLE, "url_len": url_len, "token_len": token_len})
+    import os, requests as _req
+    url   = os.environ.get("UPSTASH_REDIS_REST_URL",   "").strip("\"'")
+    token = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "").strip("\"'")
+    result = {"kv_available": KV_AVAILABLE, "url_len": len(url), "token_len": len(token)}
+    try:
+        r = _req.get(f"{url}/get/scanner:last_run",
+                     headers={"Authorization": f"Bearer {token}"}, timeout=8)
+        result["http_status"] = r.status_code
+        result["raw_response"] = r.text[:200]
+    except Exception as e:
+        result["error"] = str(e)
+    return jsonify(result)
 
 
 @app.route("/")
