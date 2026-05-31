@@ -9,9 +9,9 @@ import os
 
 import requests
 
-# Support both Upstash direct and Vercel KV variable names; strip any accidental quotes
-_URL   = (os.environ.get("UPSTASH_REDIS_REST_URL")   or os.environ.get("KV_REST_API_URL",   "")).strip("\"'")
-_TOKEN = (os.environ.get("UPSTASH_REDIS_REST_TOKEN") or os.environ.get("KV_REST_API_TOKEN", "")).strip("\"'")
+# Support both Upstash direct and Vercel KV variable names; strip quotes and BOM
+_URL   = (os.environ.get("UPSTASH_REDIS_REST_URL")   or os.environ.get("KV_REST_API_URL",   "")).strip().strip("\"'").lstrip("﻿")
+_TOKEN = (os.environ.get("UPSTASH_REDIS_REST_TOKEN") or os.environ.get("KV_REST_API_TOKEN", "")).strip().strip("\"'").lstrip("﻿")
 
 KV_AVAILABLE = bool(_URL and _TOKEN)
 
