@@ -21,49 +21,198 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; }
 
-    /* ── Overlays ── */
-    .overlay {
+    /* ── Animations ── */
+    @keyframes fadeUp   { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes ctaGlow  { 0%,100% { box-shadow:0 0 28px rgba(56,189,248,.45),0 0 60px rgba(139,92,246,.2),0 4px 20px rgba(0,0,0,.5); } 50% { box-shadow:0 0 48px rgba(56,189,248,.7),0 0 90px rgba(139,92,246,.35),0 4px 28px rgba(0,0,0,.6); } }
+    @keyframes badgeDot { 0%,100% { opacity:1; } 50% { opacity:.3; } }
+    @keyframes meshDrift{ 0% { transform:translateY(0); } 100% { transform:translateY(-60px); } }
+
+    /* ── Landing overlay ── */
+    #auth-overlay {
       position: fixed; inset: 0; z-index: 100;
-      background: rgba(13,17,23,0.97);
+      background: #050b16;
+      display: flex; align-items: center; justify-content: center;
+      overflow-y: auto;
+    }
+
+    /* Cinematic background layers */
+    #auth-overlay::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 90% 55% at 50% -5%,  rgba(56,189,248,.13) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 85% 75%,  rgba(139,92,246,.09) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 35% at 10% 80%,  rgba(56,189,248,.06) 0%, transparent 50%);
+    }
+    #auth-overlay::after {
+      content: ''; position: fixed; inset: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(56,189,248,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56,189,248,.035) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 20%, transparent 75%);
+    }
+
+    /* Candlestick bars decoration */
+    .lp-candles {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: flex-end; gap: 7px;
+      height: 220px; width: 560px; pointer-events: none; opacity: .07;
+    }
+    .lp-candles span {
+      flex: 1; border-radius: 2px 2px 0 0;
+      background: linear-gradient(180deg, #38bdf8, #7c3aed);
+    }
+
+    /* Hero wrapper */
+    .lp-wrap {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 960px;
+      padding: 56px 32px 80px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center;
+      animation: fadeUp .5s ease both;
+    }
+    @media (max-width: 720px) {
+      .lp-wrap { grid-template-columns: 1fr; gap: 36px; padding: 40px 20px 60px; }
+      .lp-right { order: -1; }
+    }
+
+    /* Left column — hero copy */
+    .lp-left {}
+    .lp-eyebrow {
+      font-size: 0.68rem; font-weight: 800; letter-spacing: .18em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #38bdf8, #a78bfa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 18px;
+    }
+    .lp-logo {
+      font-size: 2.8rem; line-height: 1;
+      filter: drop-shadow(0 0 18px rgba(56,189,248,.7)) drop-shadow(0 0 40px rgba(56,189,248,.3));
+      margin-bottom: 12px; display: block;
+    }
+    .lp-title {
+      font-size: clamp(2rem, 4.5vw, 3rem); font-weight: 900;
+      letter-spacing: -.03em; line-height: 1.1; margin-bottom: 16px;
+      background: linear-gradient(135deg, #f0f6ff 0%, #c8dff7 50%, #38bdf8 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .lp-sub {
+      font-size: 0.95rem; color: rgba(139,148,158,.85);
+      line-height: 1.65; margin-bottom: 32px; max-width: 380px;
+    }
+
+    /* Trial badge */
+    .lp-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(63,185,80,.08); border: 1px solid rgba(63,185,80,.22);
+      color: #3fb950; border-radius: 100px;
+      padding: 6px 16px; font-size: 0.75rem; font-weight: 700;
+      letter-spacing: .05em; margin-bottom: 20px;
+    }
+    .lp-badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #3fb950; animation: badgeDot 1.8s ease-in-out infinite;
+    }
+
+    /* CTA button */
+    .lp-cta {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; max-width: 380px; padding: 17px 28px;
+      background: linear-gradient(130deg, #38bdf8 0%, #818cf8 50%, #a855f7 100%);
+      color: #fff; border: none; border-radius: 12px;
+      cursor: pointer; font-size: 1.05rem; font-weight: 700; letter-spacing: .01em;
+      position: relative; overflow: hidden; margin-bottom: 16px;
+      animation: ctaGlow 2.6s ease-in-out infinite;
+      transition: transform .25s, filter .25s;
+    }
+    .lp-cta::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,.15) 0%, transparent 55%);
+      pointer-events: none;
+    }
+    .lp-cta:hover { transform: translateY(-3px) scale(1.025); filter: brightness(1.12); animation: none; box-shadow: 0 0 70px rgba(56,189,248,.65), 0 12px 40px rgba(139,92,246,.4); }
+    .lp-cta:active { transform: scale(.98); }
+    .lp-cta:disabled { opacity: .4; cursor: not-allowed; animation: none; }
+    .lp-cta-arrow { font-size: 1.1rem; transition: transform .2s; }
+    .lp-cta:hover .lp-cta-arrow { transform: translateX(4px); }
+
+    /* Secondary sign-in */
+    .lp-signin {
+      background: none; border: none; padding: 6px 0;
+      color: rgba(139,148,158,.65); font-size: 0.83rem;
+      cursor: pointer; display: block;
+      text-decoration: underline; text-underline-offset: 3px;
+      transition: color .2s;
+    }
+    .lp-signin:hover { color: #c9d1d9; }
+    .lp-signin:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* Right column — bento panels */
+    .lp-right {}
+    .bento-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    .bento {
+      background: rgba(255,255,255,.034);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 14px; padding: 20px 18px;
+      backdrop-filter: blur(16px);
+      transition: border-color .3s, background .3s;
+      position: relative; overflow: hidden;
+    }
+    .bento::before {
+      content: ''; position: absolute; inset: 0; border-radius: 14px; pointer-events: none;
+      background: radial-gradient(circle at 0% 0%, var(--bento-glow, rgba(56,189,248,.06)) 0%, transparent 70%);
+    }
+    .bento:hover { border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.055); }
+    .bento-icon { font-size: 1.5rem; margin-bottom: 10px; display: block; }
+    .bento-title { font-size: 0.82rem; font-weight: 700; color: #e6edf3; margin-bottom: 5px; letter-spacing: .01em; }
+    .bento-desc  { font-size: 0.76rem; color: rgba(139,148,158,.8); line-height: 1.5; }
+
+    /* Paywall overlay */
+    #paywall-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(56,189,248,.08) 0%, #050b16 60%);
       display: flex; align-items: center; justify-content: center;
     }
-    .overlay-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 16px; padding: 48px 40px;
-      max-width: 440px; width: 90%; text-align: center;
+    .paywall-card {
+      background: rgba(12,18,28,.96); border: 1px solid rgba(56,189,248,.15);
+      border-radius: 20px; padding: 48px 40px; max-width: 440px; width: 92%;
+      text-align: center; animation: fadeUp .4s ease both;
+      box-shadow: 0 0 80px rgba(0,0,0,.7);
     }
-    .overlay-card .logo { font-size: 2rem; margin-bottom: 8px; }
-    .overlay-card h2 { font-size: 1.4rem; color: var(--blue); margin-bottom: 8px; }
-    .overlay-card p { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; line-height: 1.5; }
-    .features { text-align: left; margin-bottom: 28px; }
-    .features li { list-style: none; padding: 5px 0; font-size: 0.85rem; color: var(--text); }
-    .features li::before { content: "✓ "; color: var(--green); font-weight: 700; }
+    .paywall-card .pw-logo { font-size: 2rem; filter: drop-shadow(0 0 12px rgba(56,189,248,.5)); margin-bottom: 8px; }
+    .paywall-card h2 { font-size: 1.4rem; font-weight: 800; color: #e6edf3; margin-bottom: 8px; }
+    .paywall-card p  { color: rgba(139,148,158,.8); font-size: 0.87rem; line-height: 1.6; margin-bottom: 24px; }
     .price-badge {
-      display: inline-block; background: rgba(88,166,255,0.1);
-      border: 1px solid var(--blue); border-radius: 8px;
-      padding: 12px 24px; margin-bottom: 20px;
+      display: inline-block; margin-bottom: 24px;
+      background: rgba(56,189,248,.07); border: 1px solid rgba(56,189,248,.2);
+      border-radius: 12px; padding: 16px 32px;
     }
-    .price-badge .amount { font-size: 2rem; font-weight: 700; color: var(--blue); }
-    .price-badge .period { font-size: 0.8rem; color: var(--muted); }
+    .price-badge .amount { font-size: 2.4rem; font-weight: 900; color: #38bdf8; }
+    .price-badge .period { font-size: 0.78rem; color: rgba(139,148,158,.7); margin-top: 2px; }
+    .pw-features { text-align: left; margin-bottom: 28px; }
+    .pw-features li { list-style: none; padding: 8px 0; font-size: 0.84rem; color: #c9d1d9; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(48,54,61,.4); }
+    .pw-features li:last-child { border-bottom: none; }
+    .pw-features li::before { content: "✓"; color: #3fb950; font-weight: 800; }
     .btn {
-      display: block; width: 100%; padding: 13px;
-      background: var(--blue); color: #fff; border: none;
-      border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600;
-      margin-bottom: 12px; transition: opacity .2s;
+      display: block; width: 100%; padding: 15px;
+      background: linear-gradient(130deg, #38bdf8, #a855f7);
+      color: #fff; border: none; border-radius: 10px;
+      cursor: pointer; font-size: 1rem; font-weight: 700;
+      margin-bottom: 12px;
+      box-shadow: 0 0 30px rgba(56,189,248,.3);
+      transition: transform .2s, box-shadow .2s;
     }
-    .btn:hover { opacity: .85; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(56,189,248,.5); }
     .btn.outline {
-      background: transparent; border: 1px solid var(--border);
-      color: var(--muted); font-size: 0.85rem; padding: 10px;
+      background: transparent; border: 1px solid rgba(48,54,61,.8);
+      color: var(--muted); font-size: 0.85rem; padding: 11px;
+      box-shadow: none;
     }
-    .fine-print { font-size: 0.75rem; color: var(--muted); margin-top: 8px; }
-    .trial-badge {
-      display: inline-block; background: rgba(63,185,80,0.12);
-      color: var(--green); border: 1px solid rgba(63,185,80,0.3);
-      border-radius: 20px; padding: 2px 12px; font-size: 0.75rem; font-weight: 600;
-      margin-bottom: 20px;
-    }
-    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn.outline:hover { transform: none; box-shadow: none; color: var(--text); }
+    .fine-print { font-size: 0.73rem; color: rgba(139,148,158,.5); margin-top: 12px; }
 
     /* ── Header ── */
     header {
@@ -137,43 +286,90 @@
 </head>
 <body>
 
-<!-- ── Auth gate overlay ─────────────────────────────── -->
-<div class="overlay" id="auth-overlay">
-  <div class="overlay-card">
-    <div class="logo">⚡</div>
-    <h2>Apollo Quant Trading</h2>
-    <p>AI-powered BUY / SELL signals across 14 stocks, crypto & forex assets — updated every 5 minutes.</p>
-    <ul class="features">
-      <li>Live signals with confidence scores</li>
-      <li>4 strategies: Momentum, Ichimoku, Mean Reversion, Volume-Price</li>
-      <li>Risk management & position sizing</li>
-      <li>AI market summaries via Gemini</li>
-    </ul>
-    <div class="trial-badge">7-day free trial — no credit card required</div>
-    <button class="btn" id="btn-start" onclick="clerkSignUp()" disabled>Loading…</button>
-    <button class="btn outline" id="btn-login" onclick="clerkSignIn()" disabled>Already have an account? Sign in</button>
+<!-- ── Auth gate / landing page ──────────────────────── -->
+<div id="auth-overlay">
+
+  <!-- Decorative candlestick bars -->
+  <div class="lp-candles" aria-hidden="true">
+    <span style="height:38%"></span><span style="height:62%"></span><span style="height:45%"></span>
+    <span style="height:78%"></span><span style="height:55%"></span><span style="height:90%"></span>
+    <span style="height:42%"></span><span style="height:68%"></span><span style="height:50%"></span>
+    <span style="height:82%"></span><span style="height:35%"></span><span style="height:72%"></span>
+    <span style="height:58%"></span><span style="height:95%"></span><span style="height:40%"></span>
+    <span style="height:66%"></span><span style="height:48%"></span><span style="height:85%"></span>
+  </div>
+
+  <div class="lp-wrap">
+
+    <!-- Left: hero copy -->
+    <div class="lp-left">
+      <div class="lp-eyebrow">Institutional-Grade Signal Intelligence</div>
+      <span class="lp-logo">⚡</span>
+      <h1 class="lp-title">Apollo Quant Trading</h1>
+      <p class="lp-sub">AI-powered BUY / SELL signals across stocks, crypto &amp; forex — 14 assets scanned every 5 minutes with real-time confidence scoring.</p>
+
+      <div class="lp-badge">
+        <span class="lp-badge-dot"></span>
+        7-day free trial &nbsp;·&nbsp; no credit card required
+      </div>
+
+      <button class="lp-cta" id="btn-start" onclick="clerkSignUp()" disabled>
+        Loading…
+        <span class="lp-cta-arrow">→</span>
+      </button>
+      <button class="lp-signin" id="btn-login" onclick="clerkSignIn()" disabled>
+        Already have an account? Sign in
+      </button>
+    </div>
+
+    <!-- Right: bento feature panels -->
+    <div class="lp-right">
+      <div class="bento-grid">
+        <div class="bento" style="--bento-glow:rgba(56,189,248,.08)">
+          <span class="bento-icon">📡</span>
+          <div class="bento-title">Live Signals</div>
+          <div class="bento-desc">BUY / SELL / HOLD on 14 assets with confidence scoring, every 5 min.</div>
+        </div>
+        <div class="bento" style="--bento-glow:rgba(139,92,246,.08)">
+          <span class="bento-icon">🔄</span>
+          <div class="bento-title">4 Strategies</div>
+          <div class="bento-desc">Momentum, Ichimoku, Mean Reversion &amp; Volume-Price run in parallel.</div>
+        </div>
+        <div class="bento" style="--bento-glow:rgba(63,185,80,.07)">
+          <span class="bento-icon">🛡</span>
+          <div class="bento-title">Risk Engine</div>
+          <div class="bento-desc">Automated position sizing, stop-loss &amp; drawdown protection per trade.</div>
+        </div>
+        <div class="bento" style="--bento-glow:rgba(251,191,36,.07)">
+          <span class="bento-icon">🤖</span>
+          <div class="bento-title">AI Analysis</div>
+          <div class="bento-desc">Gemini-powered market summaries generated after every scan cycle.</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <!-- ── Paywall overlay ───────────────────────────────── -->
-<div class="overlay" id="paywall-overlay" style="display:none">
-  <div class="overlay-card">
-    <div class="logo">⚡</div>
+<div id="paywall-overlay" style="display:none">
+  <div class="paywall-card">
+    <div class="pw-logo">⚡</div>
     <h2>Your free trial has ended</h2>
     <p>Subscribe to keep receiving live market signals across stocks, crypto, and forex.</p>
     <div class="price-badge">
       <div class="amount">$15</div>
       <div class="period">per month · cancel anytime</div>
     </div>
-    <ul class="features" style="margin-bottom:24px">
+    <ul class="pw-features">
       <li>Live signals every 5 minutes</li>
-      <li>14 assets — stocks, crypto & forex</li>
-      <li>AI market summaries</li>
-      <li>Full backtest engine</li>
+      <li>14 assets — stocks, crypto &amp; forex</li>
+      <li>AI market summaries via Gemini</li>
+      <li>Full backtest &amp; strategy engine</li>
     </ul>
     <button class="btn" onclick="subscribe()">Subscribe Now</button>
     <button class="btn outline" onclick="signOut()">Sign out</button>
-    <p class="fine-print">Secure payment via Stripe. Cancel anytime from your account.</p>
+    <p class="fine-print">Secure payment via Stripe · Cancel anytime from your account.</p>
   </div>
 </div>
 
@@ -261,7 +457,7 @@
 
     // In Clerk v5 CDN mode, window.Clerk is the pre-initialized instance
     if (!window.Clerk) {
-      document.getElementById('btn-start').textContent = 'Failed to load — refresh page';
+      document.getElementById('btn-start').innerHTML = 'Failed to load — refresh page';
       return;
     }
 
@@ -269,14 +465,15 @@
       clerkInstance = window.Clerk;
       await clerkInstance.load();
     } catch(e) {
-      document.getElementById('btn-start').textContent = 'Auth error — refresh page';
+      document.getElementById('btn-start').innerHTML = 'Auth error — refresh page';
       console.error('Clerk load error:', e);
       return;
     }
 
     // Enable buttons
-    document.getElementById('btn-start').textContent = 'Start free 7-day trial';
-    document.getElementById('btn-start').disabled = false;
+    const btnStart = document.getElementById('btn-start');
+    btnStart.innerHTML = 'Start free 7-day trial <span class="lp-cta-arrow">→</span>';
+    btnStart.disabled = false;
     document.getElementById('btn-login').disabled = false;
 
     if (clerkInstance.user) {
