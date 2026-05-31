@@ -1,0 +1,14 @@
+Add a legally compliant footer section at the absolute bottom of the page design. The text must use a clean low contrast font that sits perfectly within the deep dark cinematic background without distracting from the primary call to action. Include space for a standard financial disclosure stating that the platform offers algorithmic tools for educational use rather than personal financial advice and that all trading involves risk. Include clean secondary text links for Terms of Service and Privacy Policy.
+
+Redesign the landing page for Apollo Quant Trading to be a premium modern and cinematic financial technology interface.
+
+Visual Style: Move away from a basic centered card on a flat dark background. Use a deep dark mode with cinematic lighting and subtle volumetric glows. Incorporate a background that features a blurred abstract data mesh or glowing candlestick visualizations to create depth. Use vibrant accent colors like neon electric blue or gold to highlight the lightning bolt logo and key interactive elements.
+
+Layout and Structure: Create a dynamic hero section. Make the main headline "Apollo Quant Trading" large and impactful with a crisp modern sans serif font that reflects enterprise grade architecture.
+
+Features Presentation: Transform the current text list into sleek bento box UI components or floating glassmorphic panels. Visually separate and highlight the key features: live signals with confidence scores, the four distinct trading strategies, risk management, and the AI market summaries.
+
+Call to Action: Redesign the "Start free 7 day trial" button to be a highly clickable primary focal point with a sleek gradient and a soft outer glow. Visually frame this action as a premium investment in their trading platform. Ensure the "Sign in" option remains clear but secondary.
+
+Overall Tone: The design must feel cutting edge, institutional grade, and highly professional. Remove any visual clutter and ensure the user interface flows naturally.
+
