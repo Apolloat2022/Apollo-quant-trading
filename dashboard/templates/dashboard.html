@@ -56,7 +56,7 @@
       border-radius: 20px; padding: 2px 12px; font-size: 0.75rem; font-weight: 600;
       margin-bottom: 20px;
     }
-    #clerk-container { min-height: 320px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
 
     /* ── Header ── */
     header {
@@ -143,7 +143,8 @@
       <li>AI market summaries via Gemini</li>
     </ul>
     <div class="trial-badge">7-day free trial — no credit card required</div>
-    <div id="clerk-container"></div>
+    <button class="btn" id="btn-start" onclick="clerkSignUp()" disabled>Loading…</button>
+    <button class="btn outline" id="btn-login" onclick="clerkSignIn()" disabled>Already have an account? Sign in</button>
   </div>
 </div>
 
@@ -246,27 +247,41 @@
   // ── Boot ──────────────────────────────────────────────
   async function boot() {
     if (!CLERK_PK || CLERK_PK === "None" || CLERK_PK === "") {
-      // Dev mode — no Clerk configured, show dashboard directly
       showDashboard({ has_access: true, subscribed: false, trial_active: true, trial_days_left: 7 });
       return;
     }
 
-    // Load Clerk JS dynamically
     await loadScript(`https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`);
 
     clerkInstance = new window.Clerk(CLERK_PK);
     await clerkInstance.load();
 
+    // Enable auth buttons now that Clerk is ready
+    const btnStart = document.getElementById('btn-start');
+    const btnLogin = document.getElementById('btn-login');
+    btnStart.textContent = 'Start free 7-day trial';
+    btnStart.disabled = false;
+    btnLogin.disabled = false;
+
     if (clerkInstance.user) {
       await onSignedIn();
     } else {
-      // Mount sign-in component inside the overlay
-      clerkInstance.mountSignIn(document.getElementById('clerk-container'), {
-        afterSignInUrl: window.location.href,
-        afterSignUpUrl: window.location.href,
-      });
+      // Listen for sign-in completing (e.g. after OAuth redirect)
       clerkInstance.addListener(({ user }) => { if (user) onSignedIn(); });
     }
+  }
+
+  function clerkSignUp() {
+    clerkInstance.openSignUp({
+      afterSignUpUrl: window.location.href,
+      afterSignInUrl: window.location.href,
+    });
+  }
+
+  function clerkSignIn() {
+    clerkInstance.openSignIn({
+      afterSignInUrl: window.location.href,
+    });
   }
 
   async function onSignedIn() {
