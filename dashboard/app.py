@@ -14,7 +14,7 @@ _TZ = ZoneInfo("America/Chicago")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, render_template_string, request
 from auth import get_user_access, require_access
 from kv_store import KV_AVAILABLE, kv_get, kv_set
 
@@ -47,12 +47,128 @@ def _read_signals(limit: int = 100) -> list[dict]:
 # PUBLIC ROUTES
 # ──────────────────────────────────────────────────────────
 
+_LEGAL_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>{{ title }} — Apollo Quant Trading</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#050b16;color:#c9d1d9;font-family:'Segoe UI',sans-serif;min-height:100vh}
+    header{background:rgba(12,18,28,.9);border-bottom:1px solid rgba(56,189,248,.12);
+      padding:16px 32px;display:flex;align-items:center;justify-content:space-between}
+    header a{color:#38bdf8;text-decoration:none;font-weight:700;font-size:1rem}
+    header a:hover{opacity:.8}
+    .back{font-size:0.82rem;color:rgba(139,148,158,.6);text-decoration:none;
+      border:1px solid rgba(48,54,61,.8);border-radius:6px;padding:5px 12px;transition:color .2s}
+    .back:hover{color:#c9d1d9}
+    main{max-width:760px;margin:0 auto;padding:56px 32px 80px}
+    h1{font-size:1.8rem;font-weight:800;letter-spacing:-.02em;
+      background:linear-gradient(135deg,#f0f6ff,#38bdf8);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      background-clip:text;margin-bottom:8px}
+    .updated{font-size:0.75rem;color:rgba(139,148,158,.5);margin-bottom:40px}
+    h2{font-size:1rem;font-weight:700;color:#e6edf3;margin:32px 0 10px}
+    p,li{font-size:0.88rem;color:rgba(139,148,158,.85);line-height:1.75;margin-bottom:10px}
+    ul{padding-left:20px;margin-bottom:10px}
+    footer{text-align:center;padding:32px;font-size:0.72rem;color:rgba(139,148,158,.3)}
+  </style>
+</head>
+<body>
+<header>
+  <a href="/">⚡ Apollo Quant Trading</a>
+  <a href="/" class="back">← Back</a>
+</header>
+<main>
+  <h1>{{ title }}</h1>
+  <p class="updated">Last updated: May 2026</p>
+  {{ body | safe }}
+</main>
+<footer>© 2026 Apollo Quant Trading. All rights reserved.</footer>
+</body>
+</html>"""
+
+_TERMS_BODY = """
+<h2>1. Acceptance of Terms</h2>
+<p>By accessing or using Apollo Quant Trading ("the Platform"), you agree to be bound by these Terms of Service. If you do not agree, you may not use the Platform.</p>
+
+<h2>2. Educational Purpose Only</h2>
+<p>The Platform provides algorithmic signal tools, market analysis, and backtesting capabilities for <strong>educational and informational purposes only</strong>. Nothing on this Platform constitutes personal financial advice, investment recommendations, or a solicitation to buy or sell any financial instrument, security, or asset.</p>
+
+<h2>3. Risk Disclosure</h2>
+<p>All trading and investing involves substantial risk of loss. You may lose some or all of your invested capital. Past performance of any strategy, signal, or algorithm shown on this Platform is not indicative of future results. You are solely responsible for any trading decisions you make.</p>
+
+<h2>4. No Financial Advisory Relationship</h2>
+<p>Apollo Quant Trading is not a registered investment advisor, broker-dealer, or financial institution. Use of this Platform does not create an advisory or fiduciary relationship between you and Apollo Quant Trading.</p>
+
+<h2>5. Subscriptions and Billing</h2>
+<p>Paid subscriptions are billed monthly. You may cancel at any time through the Stripe Customer Portal accessible from your account. Cancellations take effect at the end of the current billing period. No refunds are issued for partial periods.</p>
+
+<h2>6. Acceptable Use</h2>
+<p>You agree not to: (a) reverse-engineer or scrape the Platform; (b) share account credentials; (c) use the Platform for any unlawful purpose; (d) attempt to gain unauthorized access to any system or data.</p>
+
+<h2>7. Limitation of Liability</h2>
+<p>To the maximum extent permitted by law, Apollo Quant Trading shall not be liable for any direct, indirect, incidental, or consequential damages arising from your use of the Platform or reliance on any signals or information provided.</p>
+
+<h2>8. Modifications</h2>
+<p>We reserve the right to modify these Terms at any time. Continued use of the Platform after changes constitutes acceptance of the updated Terms.</p>
+
+<h2>9. Contact</h2>
+<p>For questions regarding these Terms, contact us at <a href="mailto:support@apolloquant.com" style="color:#38bdf8">support@apolloquant.com</a>.</p>
+"""
+
+_PRIVACY_BODY = """
+<h2>1. Information We Collect</h2>
+<p>We collect information you provide when creating an account (name, email address) via Clerk, and payment information processed by Stripe. We do not store raw payment card data. We also collect usage data such as login timestamps and feature interactions.</p>
+
+<h2>2. How We Use Your Information</h2>
+<ul>
+  <li>To provide and maintain your account and subscription</li>
+  <li>To process payments and manage billing via Stripe</li>
+  <li>To send service-related communications (alerts, notifications)</li>
+  <li>To improve and monitor platform performance</li>
+</ul>
+
+<h2>3. Data Storage</h2>
+<p>Account authentication is handled by Clerk. Payment data is handled by Stripe. Signal and subscription status data is stored in Upstash (Redis). We do not sell your personal information to third parties.</p>
+
+<h2>4. Third-Party Services</h2>
+<p>We use the following third-party services: <strong>Clerk</strong> (authentication), <strong>Stripe</strong> (payments), <strong>Upstash</strong> (data storage), <strong>Vercel</strong> (hosting), and <strong>Google Gemini</strong> (AI summaries). Each service operates under its own privacy policy.</p>
+
+<h2>5. Cookies and Sessions</h2>
+<p>We use session cookies necessary for authentication. We do not use tracking or advertising cookies.</p>
+
+<h2>6. Data Retention</h2>
+<p>We retain your account data for as long as your account is active. You may request deletion of your data at any time by contacting us.</p>
+
+<h2>7. Your Rights</h2>
+<p>Depending on your jurisdiction, you may have rights to access, correct, or delete your personal data. To exercise these rights, contact us at <a href="mailto:support@apolloquant.com" style="color:#38bdf8">support@apolloquant.com</a>.</p>
+
+<h2>8. Changes to This Policy</h2>
+<p>We may update this Privacy Policy periodically. We will notify you of significant changes via email or a notice on the Platform.</p>
+
+<h2>9. Contact</h2>
+<p>For privacy-related questions, contact <a href="mailto:support@apolloquant.com" style="color:#38bdf8">support@apolloquant.com</a>.</p>
+"""
+
+
 @app.route("/")
 def index():
     return render_template(
         "dashboard.html",
         clerk_pk=os.getenv("CLERK_PUBLISHABLE_KEY", ""),
     )
+
+
+@app.route("/terms")
+def terms():
+    return render_template_string(_LEGAL_PAGE, title="Terms of Service", body=_TERMS_BODY)
+
+
+@app.route("/privacy")
+def privacy():
+    return render_template_string(_LEGAL_PAGE, title="Privacy Policy", body=_PRIVACY_BODY)
 
 
 @app.route("/api/add_signal", methods=["POST"])
