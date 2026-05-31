@@ -5,7 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Apollo Quant Trading</title>
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js"></script>
+  {% if clerk_pk %}
+  <script
+    data-clerk-publishable-key="{{ clerk_pk }}"
+    src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+    crossorigin="anonymous">
+  </script>
+  {% endif %}
   <style>
     :root {
       --bg: #0d1117; --surface: #161b22; --border: #30363d;
@@ -247,18 +253,20 @@
 
   // ── Boot ──────────────────────────────────────────────
   async function boot() {
+    // Dev mode — no Clerk key configured
     if (!CLERK_PK || CLERK_PK === "None" || CLERK_PK === "") {
       showDashboard({ has_access: true, subscribed: false, trial_active: true, trial_days_left: 7 });
       return;
     }
 
+    // In Clerk v5 CDN mode, window.Clerk is the pre-initialized instance
     if (!window.Clerk) {
       document.getElementById('btn-start').textContent = 'Failed to load — refresh page';
       return;
     }
 
     try {
-      clerkInstance = new window.Clerk(CLERK_PK);
+      clerkInstance = window.Clerk;
       await clerkInstance.load();
     } catch(e) {
       document.getElementById('btn-start').textContent = 'Auth error — refresh page';
