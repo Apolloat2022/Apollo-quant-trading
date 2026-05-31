@@ -3,45 +3,98 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quant Trading Dashboard</title>
+  <title>Apollo Quant Trading</title>
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   <style>
     :root {
       --bg: #0d1117; --surface: #161b22; --border: #30363d;
       --text: #c9d1d9; --green: #3fb950; --red: #f85149; --yellow: #d29922;
-      --blue: #58a6ff; --muted: #8b949e;
+      --blue: #58a6ff; --muted: #8b949e; --purple: #bc8cff;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; }
+
+    /* ── Overlays ── */
+    .overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(13,17,23,0.97);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .overlay-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 48px 40px;
+      max-width: 440px; width: 90%; text-align: center;
+    }
+    .overlay-card .logo { font-size: 2rem; margin-bottom: 8px; }
+    .overlay-card h2 { font-size: 1.4rem; color: var(--blue); margin-bottom: 8px; }
+    .overlay-card p { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; line-height: 1.5; }
+    .features { text-align: left; margin-bottom: 28px; }
+    .features li { list-style: none; padding: 5px 0; font-size: 0.85rem; color: var(--text); }
+    .features li::before { content: "✓ "; color: var(--green); font-weight: 700; }
+    .price-badge {
+      display: inline-block; background: rgba(88,166,255,0.1);
+      border: 1px solid var(--blue); border-radius: 8px;
+      padding: 12px 24px; margin-bottom: 20px;
+    }
+    .price-badge .amount { font-size: 2rem; font-weight: 700; color: var(--blue); }
+    .price-badge .period { font-size: 0.8rem; color: var(--muted); }
+    .btn {
+      display: block; width: 100%; padding: 13px;
+      background: var(--blue); color: #fff; border: none;
+      border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600;
+      margin-bottom: 12px; transition: opacity .2s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn.outline {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); font-size: 0.85rem; padding: 10px;
+    }
+    .fine-print { font-size: 0.75rem; color: var(--muted); margin-top: 8px; }
+    .trial-badge {
+      display: inline-block; background: rgba(63,185,80,0.12);
+      color: var(--green); border: 1px solid rgba(63,185,80,0.3);
+      border-radius: 20px; padding: 2px 12px; font-size: 0.75rem; font-weight: 600;
+      margin-bottom: 20px;
+    }
+    #clerk-container { min-height: 320px; }
+
+    /* ── Header ── */
     header {
       background: var(--surface); border-bottom: 1px solid var(--border);
       padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px;
     }
     header h1 { font-size: 1.2rem; color: var(--blue); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
     #status { font-size: 0.8rem; color: var(--muted); }
+    #trial-info { font-size: 0.78rem; padding: 3px 10px; border-radius: 12px; display: none; }
+    #trial-info.active { background: rgba(63,185,80,0.1); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+    #trial-info.expiring { background: rgba(210,153,34,0.1); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); }
+    #trial-info.subscribed { background: rgba(88,166,255,0.1); color: var(--blue); border: 1px solid rgba(88,166,255,0.2); }
+    .btn-sm {
+      font-size: 0.78rem; padding: 5px 12px; border-radius: 6px; border: none;
+      cursor: pointer; font-weight: 600; transition: opacity .2s;
+    }
+    .btn-sm:hover { opacity: .85; }
+    #btn-subscribe { background: var(--blue); color: #fff; display: none; }
+    #btn-manage    { background: transparent; color: var(--muted); border: 1px solid var(--border); display: none; }
+    #btn-signout   { background: transparent; color: var(--muted); border: 1px solid var(--border); display: none; }
+
+    /* ── Dashboard layout ── */
     .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
     .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 16px; text-align: center;
-    }
-    .card .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
+    .card .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
     .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 6px; }
-    .card.buy .value { color: var(--green); }
+    .card.buy .value  { color: var(--green); }
     .card.sell .value { color: var(--red); }
     .card.hold .value { color: var(--yellow); }
     .card.total .value { color: var(--blue); }
-    .card.conf .value { color: var(--text); }
+    .card.conf .value  { color: var(--text); }
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-    .chart-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 12px;
-    }
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
     .chart-card h3 { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
-    .backtest-section {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 20px; margin-bottom: 24px;
-    }
+    .backtest-section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 24px; }
     .backtest-section h2 { font-size: 1rem; margin-bottom: 14px; color: var(--blue); }
     .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
     .form-row label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 4px; }
@@ -49,11 +102,11 @@
       background: var(--bg); border: 1px solid var(--border);
       color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 0.85rem; min-width: 120px;
     }
-    button {
+    button.action {
       background: var(--blue); color: #fff; border: none;
       border-radius: 6px; padding: 9px 18px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
     }
-    button:hover { opacity: 0.85; }
+    button.action:hover { opacity: .85; }
     #bt-results { margin-top: 12px; font-size: 0.85rem; }
     .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
     .result-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
@@ -62,15 +115,12 @@
     .signals-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
     .signals-table th { background: var(--surface); color: var(--muted); padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
     .signals-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
-    .signals-table tr:hover td { background: rgba(255,255,255,0.02); }
-    .badge {
-      display: inline-block; padding: 2px 8px; border-radius: 12px;
-      font-size: 0.73rem; font-weight: 700; letter-spacing: 0.04em;
-    }
-    .badge.BUY  { background: rgba(63,185,80,0.15); color: var(--green); }
-    .badge.SELL { background: rgba(248,81,73,0.15);  color: var(--red); }
-    .badge.HOLD { background: rgba(210,153,34,0.15); color: var(--yellow); }
-    .conf-bar { background: var(--border); border-radius: 4px; height: 6px; width: 80px; display: inline-block; vertical-align: middle; }
+    .signals-table tr:hover td { background: rgba(255,255,255,.02); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.73rem; font-weight: 700; letter-spacing: .04em; }
+    .badge.BUY  { background: rgba(63,185,80,.15);  color: var(--green); }
+    .badge.SELL { background: rgba(248,81,73,.15);   color: var(--red); }
+    .badge.HOLD { background: rgba(210,153,34,.15);  color: var(--yellow); }
+    .conf-bar  { background: var(--border); border-radius: 4px; height: 6px; width: 80px; display: inline-block; vertical-align: middle; }
     .conf-fill { background: var(--blue); border-radius: 4px; height: 6px; }
     .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
     .table-header { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
@@ -79,84 +129,212 @@
   </style>
 </head>
 <body>
-<header>
-  <h1>⚡ Quant Trading Dashboard</h1>
-  <span id="status">Loading…</span>
-</header>
 
-<div class="container">
-  <!-- Metric Cards -->
-  <div class="metrics">
-    <div class="card total"><div class="label">Total Signals</div><div class="value" id="m-total">0</div></div>
-    <div class="card buy">  <div class="label">BUY</div><div class="value" id="m-buy">0</div></div>
-    <div class="card sell"> <div class="label">SELL</div><div class="value" id="m-sell">0</div></div>
-    <div class="card hold"> <div class="label">HOLD</div><div class="value" id="m-hold">0</div></div>
-    <div class="card conf"> <div class="label">Avg Confidence</div><div class="value" id="m-conf">0%</div></div>
+<!-- ── Auth gate overlay ─────────────────────────────── -->
+<div class="overlay" id="auth-overlay">
+  <div class="overlay-card">
+    <div class="logo">⚡</div>
+    <h2>Apollo Quant Trading</h2>
+    <p>AI-powered BUY / SELL signals across 14 stocks, crypto & forex assets — updated every 5 minutes.</p>
+    <ul class="features">
+      <li>Live signals with confidence scores</li>
+      <li>4 strategies: Momentum, Ichimoku, Mean Reversion, Volume-Price</li>
+      <li>Risk management & position sizing</li>
+      <li>AI market summaries via Gemini</li>
+    </ul>
+    <div class="trial-badge">7-day free trial — no credit card required</div>
+    <div id="clerk-container"></div>
   </div>
+</div>
 
-  <!-- Charts -->
-  <div class="charts">
-    <div class="chart-card"><h3>Signal Distribution</h3><div id="pie-chart" style="height:260px"></div></div>
-    <div class="chart-card"><h3>Confidence by Symbol</h3><div id="bar-chart" style="height:260px"></div></div>
-  </div>
-
-  <!-- Backtest Panel -->
-  <div class="backtest-section">
-    <h2>📈 Backtest Strategy</h2>
-    <div class="form-row">
-      <div><label>Symbol</label><input id="bt-sym" value="AAPL" placeholder="AAPL / BTC/USDT / EURUSD=X" style="min-width:200px" /></div>
-      <div><label>Asset Type</label>
-        <select id="bt-type" onchange="updateSymbolHint()">
-          <option value="stock">Stock</option>
-          <option value="crypto">Crypto</option>
-          <option value="forex">Forex</option>
-        </select>
-      </div>
-      <div><label>Strategy</label>
-        <select id="bt-strat">
-          <option value="combined">Combined</option>
-          <option value="momentum">Momentum</option>
-        </select>
-      </div>
-      <div><label>Capital ($)</label><input id="bt-cap" type="number" value="10000" min="1000" /></div>
-      <div><button onclick="runBacktest()">Run Backtest</button></div>
-      <div><button onclick="compareStrategies()" style="background:#3fb950">Compare All</button></div>
+<!-- ── Paywall overlay ───────────────────────────────── -->
+<div class="overlay" id="paywall-overlay" style="display:none">
+  <div class="overlay-card">
+    <div class="logo">⚡</div>
+    <h2>Your free trial has ended</h2>
+    <p>Subscribe to keep receiving live market signals across stocks, crypto, and forex.</p>
+    <div class="price-badge">
+      <div class="amount">$15</div>
+      <div class="period">per month · cancel anytime</div>
     </div>
-    <div id="bt-results"></div>
+    <ul class="features" style="margin-bottom:24px">
+      <li>Live signals every 5 minutes</li>
+      <li>14 assets — stocks, crypto & forex</li>
+      <li>AI market summaries</li>
+      <li>Full backtest engine</li>
+    </ul>
+    <button class="btn" onclick="subscribe()">Subscribe Now</button>
+    <button class="btn outline" onclick="signOut()">Sign out</button>
+    <p class="fine-print">Secure payment via Stripe. Cancel anytime from your account.</p>
   </div>
+</div>
 
-  <!-- Signals Table -->
-  <div class="table-wrap">
-    <div class="table-header">
-      <h2>Live Signals</h2>
-      <span id="signal-count">0 signals</span>
+<!-- ── Main dashboard ────────────────────────────────── -->
+<div id="dashboard" style="display:none">
+  <header>
+    <h1>⚡ Apollo Quant Trading</h1>
+    <div class="header-right">
+      <span id="trial-info"></span>
+      <button class="btn-sm" id="btn-subscribe" onclick="subscribe()">Subscribe $15/mo</button>
+      <button class="btn-sm" id="btn-manage"    onclick="manageSubscription()">Manage Plan</button>
+      <span id="status">Loading…</span>
+      <button class="btn-sm" id="btn-signout"   onclick="signOut()">Sign out</button>
     </div>
-    <div style="overflow-x:auto">
-      <table class="signals-table">
-        <thead>
-          <tr>
-            <th>Time</th><th>Symbol</th><th>Signal</th><th>Strategy</th>
-            <th>Price</th><th>Confidence</th>
-          </tr>
-        </thead>
-        <tbody id="signals-tbody"></tbody>
-      </table>
+  </header>
+
+  <div class="container">
+    <div class="metrics">
+      <div class="card total"><div class="label">Total Signals</div><div class="value" id="m-total">0</div></div>
+      <div class="card buy">  <div class="label">BUY</div><div class="value" id="m-buy">0</div></div>
+      <div class="card sell"> <div class="label">SELL</div><div class="value" id="m-sell">0</div></div>
+      <div class="card hold"> <div class="label">HOLD</div><div class="value" id="m-hold">0</div></div>
+      <div class="card conf"> <div class="label">Avg Confidence</div><div class="value" id="m-conf">0%</div></div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-card"><h3>Signal Distribution</h3><div id="pie-chart" style="height:260px"></div></div>
+      <div class="chart-card"><h3>Confidence by Symbol</h3><div id="bar-chart" style="height:260px"></div></div>
+    </div>
+
+    <div class="backtest-section">
+      <h2>📈 Backtest Strategy</h2>
+      <div class="form-row">
+        <div><label>Symbol</label><input id="bt-sym" value="AAPL" placeholder="AAPL / BTC/USDT / EURUSD=X" style="min-width:200px" /></div>
+        <div><label>Asset Type</label>
+          <select id="bt-type" onchange="updateSymbolHint()">
+            <option value="stock">Stock</option>
+            <option value="crypto">Crypto</option>
+            <option value="forex">Forex</option>
+          </select>
+        </div>
+        <div><label>Strategy</label>
+          <select id="bt-strat">
+            <option value="combined">Combined</option>
+            <option value="momentum">Momentum</option>
+          </select>
+        </div>
+        <div><label>Capital ($)</label><input id="bt-cap" type="number" value="10000" min="1000" /></div>
+        <div><button class="action" onclick="runBacktest()">Run Backtest</button></div>
+        <div><button class="action" onclick="compareStrategies()" style="background:#3fb950">Compare All</button></div>
+      </div>
+      <div id="bt-results"></div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2>Live Signals</h2>
+        <span id="signal-count">0 signals</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="signals-table">
+          <thead><tr><th>Time</th><th>Symbol</th><th>Signal</th><th>Strategy</th><th>Price</th><th>Confidence</th></tr></thead>
+          <tbody id="signals-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-  let allSignals = [];
+  // ── Clerk publishable key (injected via Flask template var or window global) ──
+  const CLERK_PK = "{{ clerk_pk }}";
 
-  // ── Data fetching (polls every 30 s) ──────────────────────
+  let clerkInstance = null;
+  let authToken     = null;
+  let allSignals    = [];
+
+  // ── Boot ──────────────────────────────────────────────
+  async function boot() {
+    if (!CLERK_PK || CLERK_PK === "None" || CLERK_PK === "") {
+      // Dev mode — no Clerk configured, show dashboard directly
+      showDashboard({ has_access: true, subscribed: false, trial_active: true, trial_days_left: 7 });
+      return;
+    }
+
+    // Load Clerk JS dynamically
+    await loadScript(`https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`);
+
+    clerkInstance = new window.Clerk(CLERK_PK);
+    await clerkInstance.load();
+
+    if (clerkInstance.user) {
+      await onSignedIn();
+    } else {
+      // Mount sign-in component inside the overlay
+      clerkInstance.mountSignIn(document.getElementById('clerk-container'), {
+        afterSignInUrl: window.location.href,
+        afterSignUpUrl: window.location.href,
+      });
+      clerkInstance.addListener(({ user }) => { if (user) onSignedIn(); });
+    }
+  }
+
+  async function onSignedIn() {
+    try {
+      authToken = await clerkInstance.session.getToken();
+      const resp = await fetch('/api/auth/status', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      const status = await resp.json();
+      showDashboard(status);
+    } catch (e) {
+      console.error('Auth check failed', e);
+    }
+  }
+
+  function showDashboard(status) {
+    document.getElementById('auth-overlay').style.display = 'none';
+    document.getElementById('paywall-overlay').style.display = 'none';
+
+    if (!status.has_access) {
+      document.getElementById('paywall-overlay').style.display = 'flex';
+      return;
+    }
+
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('btn-signout').style.display = 'inline-block';
+
+    // Trial / subscription badge
+    const info = document.getElementById('trial-info');
+    info.style.display = 'inline-block';
+    if (status.subscribed) {
+      info.textContent = '✓ Subscribed';
+      info.className = 'subscribed';
+      document.getElementById('btn-manage').style.display = 'inline-block';
+    } else if (status.trial_active) {
+      const d = status.trial_days_left;
+      info.textContent = `Trial: ${d.toFixed(1)}d left`;
+      info.className = d <= 2 ? 'expiring' : 'active';
+      document.getElementById('btn-subscribe').style.display = 'inline-block';
+    }
+
+    fetchAll();
+    setInterval(fetchAll, 30_000);
+  }
+
+  // ── Data fetching ──────────────────────────────────────
+  async function authHeaders() {
+    if (clerkInstance) {
+      try { authToken = await clerkInstance.session.getToken(); } catch(e) {}
+    }
+    return authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+  }
+
   async function fetchAll() {
     try {
+      const hdrs = await authHeaders();
       const [sigRes, metRes] = await Promise.all([
-        fetch('/api/signals?limit=100'),
-        fetch('/api/metrics'),
+        fetch('/api/signals?limit=100', { headers: hdrs }),
+        fetch('/api/metrics',           { headers: hdrs }),
       ]);
+
+      if (sigRes.status === 402 || metRes.status === 402) {
+        document.getElementById('paywall-overlay').style.display = 'flex';
+        return;
+      }
+
       allSignals = await sigRes.json();
-      const m = await metRes.json();
+      const m    = await metRes.json();
 
       document.getElementById('m-total').textContent = m.total_signals;
       document.getElementById('m-buy').textContent   = m.buy_count;
@@ -169,20 +347,17 @@
         const ago  = secs < 60 ? `${secs}s ago` : `${Math.round(secs/60)}m ago`;
         document.getElementById('status').textContent = `Last scan: ${ago}`;
       } else {
-        document.getElementById('status').textContent = 'Live (no scan yet)';
+        document.getElementById('status').textContent = 'Awaiting first scan…';
       }
 
       renderCharts();
       renderTable();
-    } catch (e) {
+    } catch(e) {
       document.getElementById('status').textContent = 'Error — retrying…';
     }
   }
 
-  fetchAll();
-  setInterval(fetchAll, 30_000);
-
-  // ── Charts ────────────────────────────────────────────────
+  // ── Charts ─────────────────────────────────────────────
   function renderCharts() {
     const buys  = allSignals.filter(s => s.signal === 'BUY').length;
     const sells = allSignals.filter(s => s.signal === 'SELL').length;
@@ -193,9 +368,9 @@
       marker: { colors: ['#3fb950','#f85149','#d29922'] },
       textinfo: 'label+percent', hole: 0.4,
     }], {
-      paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-      font: { color: '#c9d1d9', size: 12 },
-      showlegend: false, margin: { t: 10, b: 10, l: 10, r: 10 },
+      paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+      font: { color:'#c9d1d9', size:12 }, showlegend:false,
+      margin: { t:10, b:10, l:10, r:10 },
     });
 
     const symMap = {};
@@ -204,21 +379,21 @@
       symMap[s.symbol].push(s.confidence || 0);
     });
     const syms  = Object.keys(symMap).slice(0, 15);
-    const confs = syms.map(k => symMap[k].reduce((a, v) => a + v, 0) / symMap[k].length);
+    const confs = syms.map(k => symMap[k].reduce((a,v) => a+v, 0) / symMap[k].length);
 
     Plotly.react('bar-chart', [{
-      type: 'bar', x: syms, y: confs.map(v => +(v * 100).toFixed(1)),
-      marker: { color: '#58a6ff' },
+      type:'bar', x:syms, y:confs.map(v => +(v*100).toFixed(1)),
+      marker: { color:'#58a6ff' },
     }], {
-      paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-      font: { color: '#c9d1d9', size: 11 },
-      margin: { t: 10, b: 60, l: 40, r: 10 },
-      yaxis: { title: 'Confidence %', gridcolor: '#30363d' },
-      xaxis: { gridcolor: '#30363d' },
+      paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+      font: { color:'#c9d1d9', size:11 },
+      margin: { t:10, b:60, l:40, r:10 },
+      yaxis: { title:'Confidence %', gridcolor:'#30363d' },
+      xaxis: { gridcolor:'#30363d' },
     });
   }
 
-  // ── Signals table ─────────────────────────────────────────
+  // ── Table ──────────────────────────────────────────────
   function renderTable() {
     document.getElementById('signal-count').textContent = allSignals.length + ' signals';
     const rows = allSignals.slice(0, 100).map(s => {
@@ -226,10 +401,10 @@
       const conf = (s.confidence || 0) * 100;
       return `<tr>
         <td style="color:var(--muted)">${ts}</td>
-        <td><b>${s.symbol || '–'}</b></td>
+        <td><b>${s.symbol||'–'}</b></td>
         <td><span class="badge ${s.signal}">${s.signal}</span></td>
-        <td>${s.strategy || '–'}</td>
-        <td>${(s.price || 0).toFixed(4)}</td>
+        <td>${s.strategy||'–'}</td>
+        <td>${(s.price||0).toFixed(4)}</td>
         <td>
           <span class="conf-bar"><span class="conf-fill" style="width:${conf}%"></span></span>
           &nbsp;${conf.toFixed(0)}%
@@ -239,15 +414,15 @@
     document.getElementById('signals-tbody').innerHTML = rows.join('');
   }
 
-  // ── Backtest ──────────────────────────────────────────────
+  // ── Backtest ───────────────────────────────────────────
   async function runBacktest() {
     const btn = event.target;
     btn.textContent = 'Running…'; btn.disabled = true;
     document.getElementById('bt-results').innerHTML = '<span style="color:var(--muted)">Fetching data and running backtest…</span>';
     try {
+      const hdrs = { 'Content-Type':'application/json', ...(await authHeaders()) };
       const resp = await fetch('/api/backtest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method:'POST', headers: hdrs,
         body: JSON.stringify({
           symbol:     document.getElementById('bt-sym').value,
           asset_type: document.getElementById('bt-type').value,
@@ -277,9 +452,9 @@
     btn.textContent = 'Comparing…'; btn.disabled = true;
     document.getElementById('bt-results').innerHTML = '<span style="color:var(--muted)">Comparing all strategies…</span>';
     try {
+      const hdrs = { 'Content-Type':'application/json', ...(await authHeaders()) };
       const resp = await fetch('/api/compare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method:'POST', headers: hdrs,
         body: JSON.stringify({
           symbol:     document.getElementById('bt-sym').value,
           asset_type: document.getElementById('bt-type').value,
@@ -309,11 +484,46 @@
   }
 
   function updateSymbolHint() {
-    const hints = { stock: 'AAPL', crypto: 'BTC/USDT', forex: 'EURUSD=X' };
+    const hints = { stock:'AAPL', crypto:'BTC/USDT', forex:'EURUSD=X' };
     const type  = document.getElementById('bt-type').value;
-    document.getElementById('bt-sym').placeholder = hints[type] || 'AAPL';
-    document.getElementById('bt-sym').value        = hints[type] || 'AAPL';
+    document.getElementById('bt-sym').placeholder = hints[type]||'AAPL';
+    document.getElementById('bt-sym').value        = hints[type]||'AAPL';
   }
+
+  // ── Auth actions ───────────────────────────────────────
+  async function subscribe() {
+    try {
+      const hdrs = { ...(await authHeaders()) };
+      const resp = await fetch('/api/subscribe', { method:'POST', headers: hdrs });
+      const { url } = await resp.json();
+      if (url && url !== '/') window.location.href = url;
+    } catch(e) { alert('Error starting checkout: ' + e.message); }
+  }
+
+  async function manageSubscription() {
+    try {
+      const hdrs = { ...(await authHeaders()) };
+      const resp = await fetch('/api/portal', { method:'POST', headers: hdrs });
+      const { url } = await resp.json();
+      if (url && url !== '/') window.location.href = url;
+    } catch(e) { alert('Error opening portal: ' + e.message); }
+  }
+
+  async function signOut() {
+    if (clerkInstance) await clerkInstance.signOut();
+    window.location.reload();
+  }
+
+  // ── Utility ────────────────────────────────────────────
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  boot();
 </script>
 </body>
 </html>
