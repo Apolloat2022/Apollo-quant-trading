@@ -53,6 +53,14 @@ def _read_signals(limit: int = 100) -> list[dict]:
 # ROUTES
 # ──────────────────────────────────────────────────────────
 
+@app.route("/api/debug")
+def api_debug():
+    import os
+    url_len   = len(os.environ.get("UPSTASH_REDIS_REST_URL",   "").strip("\"'"))
+    token_len = len(os.environ.get("UPSTASH_REDIS_REST_TOKEN", "").strip("\"'"))
+    return jsonify({"kv_available": KV_AVAILABLE, "url_len": url_len, "token_len": token_len})
+
+
 @app.route("/")
 def index():
     return render_template("dashboard.html")
