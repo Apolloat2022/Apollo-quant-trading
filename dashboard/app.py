@@ -303,87 +303,80 @@ def api_metrics():
 @app.route("/api/backtest", methods=["POST"])
 @require_access
 def api_backtest():
-    try:
-        body       = request.get_json(force=True) or {}
-        symbol     = body.get("symbol", "AAPL")
-        asset_type = body.get("asset_type", "stock")
-        capital    = float(body.get("capital", 10_000))
-        strategy   = body.get("strategy", "combined")
-
-        try:
-            from data_fetcher import fetch_asset
-            from strategies.advanced_strategies import combined_strategy, momentum_strategy
-            from backtest.engine import BacktestEngine
-        except ImportError:
-            return jsonify({"error": "Backtesting requires the full local installation. Run: python main_complete.py --mode backtest"}), 503
-
-        df = fetch_asset(symbol, asset_type, timeframe="1h", period="180d")
-        if df is None or df.empty:
-            return jsonify({"error": "Failed to fetch data"}), 400
-
-        strat_fn = combined_strategy if strategy == "combined" else momentum_strategy
-        engine   = BacktestEngine(strat_fn, initial_capital=capital)
-        result   = engine.run(df, symbol=symbol)
-
-        return jsonify({
-            "symbol":             symbol,
-            "total_return":       result.total_return,
-            "win_rate":           result.win_rate,
-            "profit_factor":      result.profit_factor,
-            "sharpe":             result.sharpe,
-            "max_drawdown":       result.max_drawdown,
-            "total_trades":       result.total_trades,
-            "avg_trade_duration": result.avg_trade_duration,
-        })
-    except Exception as exc:
-        logger.error(f"Backtest error: {exc}")
-        return jsonify({"error": str(exc)}), 500
+    return _create_backtest_job(request, mode="backtest")
 
 
 @app.route("/api/compare", methods=["POST"])
 @require_access
 def api_compare():
+    return _create_backtest_job(request, mode="compare")
+
+
+@app.route("/api/backtest/status/<job_id>")
+@require_access
+def api_backtest_status(job_id):
+    job = kv_get(f"backtest:{job_id}")
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify(job)
+
+
+def _create_backtest_job(req, mode: str):
+    """Create a backtest job in KV and trigger GitHub Actions."""
+    import uuid, time as _time
     try:
-        body       = request.get_json(force=True) or {}
-        symbol     = body.get("symbol", "AAPL")
-        asset_type = body.get("asset_type", "stock")
-        capital    = float(body.get("capital", 10_000))
-
-        try:
-            from data_fetcher import fetch_asset
-            from strategies.advanced_strategies import (
-                combined_strategy, momentum_strategy,
-                mean_reversion_strategy, volume_price_strategy,
-            )
-            from backtest.engine import BacktestEngine
-        except ImportError:
-            return jsonify({"error": "Backtesting requires the full local installation."}), 503
-
-        df = fetch_asset(symbol, asset_type, timeframe="1h", period="180d")
-        if df is None or df.empty:
-            return jsonify({"error": "Failed to fetch data"}), 400
-
-        strategies = {
-            "combined":       combined_strategy,
-            "momentum":       momentum_strategy,
-            "mean_reversion": mean_reversion_strategy,
-            "volume_price":   volume_price_strategy,
+        body = req.get_json(force=True) or {}
+        job_id = uuid.uuid4().hex[:10]
+        job = {
+            "id":     job_id,
+            "status": "pending",
+            "params": {
+                "symbol":     body.get("symbol", "AAPL"),
+                "asset_type": body.get("asset_type", "stock"),
+                "capital":    float(body.get("capital", 10_000)),
+                "strategy":   body.get("strategy", "combined"),
+                "mode":       mode,
+            },
+            "created_at": _time.time(),
         }
-        comparison = {}
-        for name, fn in strategies.items():
-            engine = BacktestEngine(fn, initial_capital=capital)
-            result = engine.run(df, symbol=symbol)
-            comparison[name] = {
-                "total_return": result.total_return,
-                "win_rate":     result.win_rate,
-                "sharpe":       result.sharpe,
-                "max_drawdown": result.max_drawdown,
-                "total_trades": result.total_trades,
-            }
-        return jsonify({"symbol": symbol, "comparison": comparison})
+        kv_set(f"backtest:{job_id}", job, ex=3600)
+
+        triggered = _trigger_gh_backtest(job_id)
+        if not triggered:
+            job["status"] = "error"
+            job["error"]  = "Failed to trigger GitHub Actions — check GITHUB_PAT secret."
+            kv_set(f"backtest:{job_id}", job, ex=3600)
+
+        return jsonify({"job_id": job_id, "status": job["status"]})
     except Exception as exc:
-        logger.error(f"Compare error: {exc}")
+        logger.error(f"Backtest job creation error: {exc}")
         return jsonify({"error": str(exc)}), 500
+
+
+def _trigger_gh_backtest(job_id: str) -> bool:
+    """Trigger the backtest workflow via GitHub API."""
+    try:
+        import requests as _req
+        token = os.environ.get("GITHUB_PAT", "")
+        repo  = os.environ.get("GITHUB_REPO", "Apolloat2022/Apollo-quant-trading")
+        if not token:
+            logger.warning("GITHUB_PAT not set — cannot trigger workflow.")
+            return False
+        r = _req.post(
+            f"https://api.github.com/repos/{repo}/actions/workflows/backtest.yml/dispatches",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept":        "application/vnd.github.v3+json",
+            },
+            json={"ref": "main", "inputs": {"job_id": job_id}},
+            timeout=10,
+        )
+        if not r.ok:
+            logger.error(f"GH dispatch failed: {r.status_code} {r.text}")
+        return r.ok
+    except Exception as exc:
+        logger.error(f"GH dispatch exception: {exc}")
+        return False
 
 
 # ──────────────────────────────────────────────────────────

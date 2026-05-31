@@ -688,73 +688,102 @@
     document.getElementById('signals-tbody').innerHTML = rows.join('');
   }
 
-  // ── Backtest ───────────────────────────────────────────
+  // ── Backtest (cloud via GitHub Actions) ───────────────
   async function runBacktest() {
     const btn = event.target;
-    btn.textContent = 'Running…'; btn.disabled = true;
-    document.getElementById('bt-results').innerHTML = '<span style="color:var(--muted)">Fetching data and running backtest…</span>';
-    try {
-      const hdrs = { 'Content-Type':'application/json', ...(await authHeaders()) };
-      const resp = await fetch('/api/backtest', {
-        method:'POST', headers: hdrs,
-        body: JSON.stringify({
-          symbol:     document.getElementById('bt-sym').value,
-          asset_type: document.getElementById('bt-type').value,
-          strategy:   document.getElementById('bt-strat').value,
-          capital:    parseFloat(document.getElementById('bt-cap').value),
-        }),
-      });
-      const data = await resp.json();
-      if (data.error) { document.getElementById('bt-results').innerHTML = `<span style="color:var(--red)">${data.error}</span>`; return; }
-      const color = r => parseFloat(r) >= 0 ? 'var(--green)' : 'var(--red)';
-      document.getElementById('bt-results').innerHTML = `
-        <div class="result-grid">
-          <div class="result-item"><div class="k">Total Return</div><div class="v" style="color:${color(data.total_return)}">${(data.total_return*100).toFixed(2)}%</div></div>
-          <div class="result-item"><div class="k">Win Rate</div><div class="v">${(data.win_rate*100).toFixed(1)}%</div></div>
-          <div class="result-item"><div class="k">Sharpe Ratio</div><div class="v" style="color:${color(data.sharpe)}">${data.sharpe}</div></div>
-          <div class="result-item"><div class="k">Max Drawdown</div><div class="v" style="color:var(--red)">${(data.max_drawdown*100).toFixed(2)}%</div></div>
-          <div class="result-item"><div class="k">Profit Factor</div><div class="v">${data.profit_factor}</div></div>
-          <div class="result-item"><div class="k">Total Trades</div><div class="v">${data.total_trades}</div></div>
-        </div>`;
-    } catch(e) {
-      document.getElementById('bt-results').innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
-    } finally { btn.textContent = 'Run Backtest'; btn.disabled = false; }
+    await _submitBacktestJob({
+      symbol:     document.getElementById('bt-sym').value,
+      asset_type: document.getElementById('bt-type').value,
+      strategy:   document.getElementById('bt-strat').value,
+      capital:    parseFloat(document.getElementById('bt-cap').value),
+    }, 'backtest', btn, 'Run Backtest');
   }
 
   async function compareStrategies() {
     const btn = event.target;
-    btn.textContent = 'Comparing…'; btn.disabled = true;
-    document.getElementById('bt-results').innerHTML = '<span style="color:var(--muted)">Comparing all strategies…</span>';
+    await _submitBacktestJob({
+      symbol:     document.getElementById('bt-sym').value,
+      asset_type: document.getElementById('bt-type').value,
+      capital:    parseFloat(document.getElementById('bt-cap').value),
+    }, 'compare', btn, 'Compare All');
+  }
+
+  async function _submitBacktestJob(params, mode, btn, btnLabel) {
+    btn.textContent = 'Queuing…'; btn.disabled = true;
+    _btStatus('Sending to cloud runner…');
     try {
       const hdrs = { 'Content-Type':'application/json', ...(await authHeaders()) };
-      const resp = await fetch('/api/compare', {
-        method:'POST', headers: hdrs,
-        body: JSON.stringify({
-          symbol:     document.getElementById('bt-sym').value,
-          asset_type: document.getElementById('bt-type').value,
-          capital:    parseFloat(document.getElementById('bt-cap').value),
-        }),
-      });
-      const data = await resp.json();
-      if (data.error) { document.getElementById('bt-results').innerHTML = `<span style="color:var(--red)">${data.error}</span>`; return; }
-      const color = r => parseFloat(r) >= 0 ? 'var(--green)' : 'var(--red)';
-      const rows = Object.entries(data.comparison).map(([name, m]) =>
-        `<tr>
-          <td><b>${name}</b></td>
-          <td style="color:${color(m.total_return)}">${(m.total_return*100).toFixed(2)}%</td>
-          <td>${(m.win_rate*100).toFixed(1)}%</td>
-          <td style="color:${color(m.sharpe)}">${m.sharpe}</td>
-          <td style="color:var(--red)">${(m.max_drawdown*100).toFixed(2)}%</td>
-          <td>${m.total_trades}</td>
-        </tr>`).join('');
-      document.getElementById('bt-results').innerHTML = `
-        <table class="signals-table" style="margin-top:8px">
-          <thead><tr><th>Strategy</th><th>Return</th><th>Win Rate</th><th>Sharpe</th><th>Max DD</th><th>Trades</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>`;
+      const endpoint = mode === 'compare' ? '/api/compare' : '/api/backtest';
+      const resp = await fetch(endpoint, { method:'POST', headers:hdrs, body:JSON.stringify(params) });
+      const job  = await resp.json();
+
+      if (job.error) { _btStatus(job.error, true); return; }
+      if (job.status === 'error') { _btStatus(job.error || 'Trigger failed — check GITHUB_PAT.', true); return; }
+
+      _btStatus('Running in cloud — checking every 5 s… (typically 60–90 s)');
+      await _pollBacktestJob(job.job_id, mode);
     } catch(e) {
-      document.getElementById('bt-results').innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
-    } finally { btn.textContent = 'Compare All'; btn.disabled = false; }
+      _btStatus('Error: ' + e.message, true);
+    } finally {
+      btn.textContent = btnLabel; btn.disabled = false;
+    }
+  }
+
+  async function _pollBacktestJob(jobId, mode) {
+    const hdrs = await authHeaders();
+    for (let i = 0; i < 36; i++) {    // max ~3 min
+      await new Promise(r => setTimeout(r, 5000));
+      try {
+        const r    = await fetch(`/api/backtest/status/${jobId}`, { headers: hdrs });
+        const job  = await r.json();
+        const secs = Math.round(Date.now()/1000 - (job.created_at||0));
+        if (job.status === 'complete') {
+          mode === 'compare' ? _renderCompare(job.result) : _renderBacktest(job.result);
+          return;
+        }
+        if (job.status === 'error') { _btStatus('Error: ' + (job.error || 'Unknown'), true); return; }
+        _btStatus(`Running in cloud… ${secs}s elapsed`);
+      } catch(e) { /* keep polling */ }
+    }
+    _btStatus('Timed out after 3 min — check GitHub Actions for details.', true);
+  }
+
+  function _btStatus(msg, isError=false) {
+    document.getElementById('bt-results').innerHTML =
+      `<span style="color:${isError ? 'var(--red)' : 'var(--muted)'}">${msg}</span>`;
+  }
+
+  function _renderBacktest(data) {
+    if (!data) { _btStatus('No result data.', true); return; }
+    const color = r => parseFloat(r) >= 0 ? 'var(--green)' : 'var(--red)';
+    document.getElementById('bt-results').innerHTML = `
+      <div class="result-grid">
+        <div class="result-item"><div class="k">Total Return</div><div class="v" style="color:${color(data.total_return)}">${(data.total_return*100).toFixed(2)}%</div></div>
+        <div class="result-item"><div class="k">Win Rate</div><div class="v">${(data.win_rate*100).toFixed(1)}%</div></div>
+        <div class="result-item"><div class="k">Sharpe Ratio</div><div class="v" style="color:${color(data.sharpe)}">${data.sharpe}</div></div>
+        <div class="result-item"><div class="k">Max Drawdown</div><div class="v" style="color:var(--red)">${(data.max_drawdown*100).toFixed(2)}%</div></div>
+        <div class="result-item"><div class="k">Profit Factor</div><div class="v">${data.profit_factor}</div></div>
+        <div class="result-item"><div class="k">Total Trades</div><div class="v">${data.total_trades}</div></div>
+      </div>`;
+  }
+
+  function _renderCompare(data) {
+    if (!data || !data.comparison) { _btStatus('No comparison data.', true); return; }
+    const color = r => parseFloat(r) >= 0 ? 'var(--green)' : 'var(--red)';
+    const rows = Object.entries(data.comparison).map(([name, m]) =>
+      `<tr>
+        <td><b>${name}</b></td>
+        <td style="color:${color(m.total_return)}">${(m.total_return*100).toFixed(2)}%</td>
+        <td>${(m.win_rate*100).toFixed(1)}%</td>
+        <td style="color:${color(m.sharpe)}">${m.sharpe}</td>
+        <td style="color:var(--red)">${(m.max_drawdown*100).toFixed(2)}%</td>
+        <td>${m.total_trades}</td>
+      </tr>`).join('');
+    document.getElementById('bt-results').innerHTML = `
+      <table class="signals-table" style="margin-top:8px">
+        <thead><tr><th>Strategy</th><th>Return</th><th>Win Rate</th><th>Sharpe</th><th>Max DD</th><th>Trades</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
   }
 
   function updateSymbolHint() {
