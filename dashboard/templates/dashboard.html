@@ -306,9 +306,17 @@
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
       const status = await resp.json();
+
+      // If server returned an auth error (not a paywall), retry once after 2s
+      if (status.error && !status.paywall) {
+        console.warn('Auth status error:', status.error, '— retrying in 2s');
+        setTimeout(onSignedIn, 2000);
+        return;
+      }
       showDashboard(status);
     } catch (e) {
       console.error('Auth check failed', e);
+      setTimeout(onSignedIn, 3000);
     }
   }
 
