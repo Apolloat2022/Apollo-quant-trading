@@ -30,6 +30,11 @@ def run():
         logger.error(f"Job {JOB_ID} not found in KV.")
         sys.exit(1)
 
+    # Guard: kv_get may return a string if the value was double-encoded
+    if isinstance(job, str):
+        import json as _json
+        job = _json.loads(job)
+
     logger.info(f"Starting job {JOB_ID}: {job['params']}")
     job["status"] = "running"
     kv_set(f"backtest:{JOB_ID}", job, ex=3600)
