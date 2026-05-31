@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Apollo Quant Trading</title>
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js"></script>
   <style>
     :root {
       --bg: #0d1117; --surface: #161b22; --border: #30363d;
@@ -251,22 +252,28 @@
       return;
     }
 
-    await loadScript(`https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`);
+    if (!window.Clerk) {
+      document.getElementById('btn-start').textContent = 'Failed to load — refresh page';
+      return;
+    }
 
-    clerkInstance = new window.Clerk(CLERK_PK);
-    await clerkInstance.load();
+    try {
+      clerkInstance = new window.Clerk(CLERK_PK);
+      await clerkInstance.load();
+    } catch(e) {
+      document.getElementById('btn-start').textContent = 'Auth error — refresh page';
+      console.error('Clerk load error:', e);
+      return;
+    }
 
-    // Enable auth buttons now that Clerk is ready
-    const btnStart = document.getElementById('btn-start');
-    const btnLogin = document.getElementById('btn-login');
-    btnStart.textContent = 'Start free 7-day trial';
-    btnStart.disabled = false;
-    btnLogin.disabled = false;
+    // Enable buttons
+    document.getElementById('btn-start').textContent = 'Start free 7-day trial';
+    document.getElementById('btn-start').disabled = false;
+    document.getElementById('btn-login').disabled = false;
 
     if (clerkInstance.user) {
       await onSignedIn();
     } else {
-      // Listen for sign-in completing (e.g. after OAuth redirect)
       clerkInstance.addListener(({ user }) => { if (user) onSignedIn(); });
     }
   }
@@ -527,15 +534,6 @@
   async function signOut() {
     if (clerkInstance) await clerkInstance.signOut();
     window.location.reload();
-  }
-
-  // ── Utility ────────────────────────────────────────────
-  function loadScript(src) {
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = src; s.onload = resolve; s.onerror = reject;
-      document.head.appendChild(s);
-    });
   }
 
   boot();
