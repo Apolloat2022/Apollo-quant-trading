@@ -85,7 +85,7 @@ _LEGAL_PAGE = """<!DOCTYPE html>
   <p class="updated">Last updated: May 2026</p>
   {{ body | safe }}
 </main>
-<footer>© 2026 Apollo Quant Trading. All rights reserved.</footer>
+<footer>© 2026 Apollo Quant Trading. All rights reserved. &nbsp;·&nbsp; Powered by Apollo Technologies US</footer>
 </body>
 </html>"""
 
@@ -115,7 +115,7 @@ _TERMS_BODY = """
 <p>We reserve the right to modify these Terms at any time. Continued use of the Platform after changes constitutes acceptance of the updated Terms.</p>
 
 <h2>9. Contact</h2>
-<p>For questions regarding these Terms, contact us at <a href="mailto:support@apolloquant.com" style="color:#38bdf8">support@apolloquant.com</a>.</p>
+<p>For questions regarding these Terms, contact us at <a href="mailto:Robinpandey@apollotechnologiesus.com" style="color:#38bdf8">Robinpandey@apollotechnologiesus.com</a>.</p>
 """
 
 _PRIVACY_BODY = """
@@ -143,13 +143,13 @@ _PRIVACY_BODY = """
 <p>We retain your account data for as long as your account is active. You may request deletion of your data at any time by contacting us.</p>
 
 <h2>7. Your Rights</h2>
-<p>Depending on your jurisdiction, you may have rights to access, correct, or delete your personal data. To exercise these rights, contact us at <a href="mailto:support@apolloquant.com" style="color:#38bdf8">support@apolloquant.com</a>.</p>
+<p>Depending on your jurisdiction, you may have rights to access, correct, or delete your personal data. To exercise these rights, contact us at <a href="mailto:Robinpandey@apollotechnologiesus.com" style="color:#38bdf8">Robinpandey@apollotechnologiesus.com</a>.</p>
 
 <h2>8. Changes to This Policy</h2>
 <p>We may update this Privacy Policy periodically. We will notify you of significant changes via email or a notice on the Platform.</p>
 
 <h2>9. Contact</h2>
-<p>For privacy-related questions, contact <a href="mailto:support@apolloquant.com" style="color:#38bdf8">support@apolloquant.com</a>.</p>
+<p>For privacy-related questions, contact <a href="mailto:Robinpandey@apollotechnologiesus.com" style="color:#38bdf8">Robinpandey@apollotechnologiesus.com</a>.</p>
 """
 
 
