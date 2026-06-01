@@ -52,8 +52,9 @@ def run() -> None:
     combined = new_signals + existing
     combined  = combined[:MAX_SIGNALS]
 
-    kv_set("signals:latest",  combined, ex=7200)
-    kv_set("scanner:last_run", now,      ex=7200)
+    # 24h TTL so signals stay visible between GitHub's sporadic cron runs
+    kv_set("signals:latest",  combined, ex=86400)
+    kv_set("scanner:last_run", now,      ex=86400)
 
     logger.info(
         f"Scan done — {len(new_signals)} new signal(s), "
