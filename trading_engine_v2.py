@@ -42,6 +42,7 @@ class TradingEngine:
         symbol: str,
         asset_type: str,
         strategy_fn=None,
+        include_hold: bool = False,
     ) -> Optional[dict]:
         """
         Fetch data for one asset and generate a signal.
@@ -50,6 +51,8 @@ class TradingEngine:
             symbol:      Asset symbol
             asset_type:  'stock', 'crypto', or 'forex'
             strategy_fn: Strategy callable (defaults to combined_strategy)
+            include_hold: When True, return the signal even for HOLD / below
+                          min_confidence (used to build a full dashboard snapshot).
 
         Returns:
             Signal dict with risk details, or None.
@@ -66,12 +69,12 @@ class TradingEngine:
         if signal_obj is None:
             return None
 
-        if signal_obj.signal == "HOLD" or signal_obj.confidence < self.min_confidence:
+        if not include_hold and (signal_obj.signal == "HOLD" or signal_obj.confidence < self.min_confidence):
             return None
 
         # Market regime check
         regime = self.risk_manager.market_regime(df)
-        if regime["trend"] == "bearish" and signal_obj.signal == "BUY" and regime["volatility_regime"] == "high":
+        if not include_hold and regime["trend"] == "bearish" and signal_obj.signal == "BUY" and regime["volatility_regime"] == "high":
             logger.info(f"Skipping {symbol} BUY – bearish high-vol regime.")
             return None
 
@@ -106,15 +109,17 @@ class TradingEngine:
 
         return result
 
-    def scan_all(self, strategy_fn=None) -> list[dict]:
+    def scan_all(self, strategy_fn=None, include_hold: bool = False) -> list[dict]:
         """
-        Scan all configured assets and return actionable signals.
+        Scan all configured assets and return signals.
 
         Args:
-            strategy_fn: Strategy callable (defaults to combined_strategy)
+            strategy_fn:  Strategy callable (defaults to combined_strategy)
+            include_hold: When True, include every asset's current signal
+                          (BUY/SELL/HOLD) — used to keep the dashboard populated.
 
         Returns:
-            List of signal dicts (only BUY/SELL above min_confidence).
+            List of signal dicts.
         """
         signals = []
 
@@ -127,7 +132,7 @@ class TradingEngine:
         for symbols, asset_type in asset_lists:
             for sym in symbols:
                 try:
-                    result = self.scan_asset(sym, asset_type, strategy_fn=strategy_fn)
+                    result = self.scan_asset(sym, asset_type, strategy_fn=strategy_fn, include_hold=include_hold)
                     if result:
                         signals.append(result)
                         logger.info(

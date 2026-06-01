@@ -41,24 +41,28 @@ def run() -> None:
     logger.info(f"Starting scan — capital=${CAPITAL:,.0f}")
     engine = TradingEngine(capital=CAPITAL)
 
-    new_signals = engine.scan_all()
+    # Full snapshot of every asset (incl. HOLD) so the dashboard is never blank
+    snapshot = engine.scan_all(include_hold=True)
 
     now = datetime.now(timezone.utc).isoformat()
-    for s in new_signals:
+    for s in snapshot:
         s.setdefault("timestamp", now)
 
-    # Merge with existing rolling window
-    existing: list = kv_get("signals:latest") or []
-    combined = new_signals + existing
-    combined  = combined[:MAX_SIGNALS]
+    # Sort actionable BUY/SELL (by confidence) to the top, HOLD below
+    rank = {"BUY": 0, "SELL": 0, "HOLD": 1}
+    snapshot.sort(key=lambda s: (rank.get(s.get("signal"), 2), -s.get("confidence", 0)))
 
-    # 24h TTL so signals stay visible between GitHub's sporadic cron runs
-    kv_set("signals:latest",  combined, ex=86400)
+    actionable = [s for s in snapshot if s.get("signal") in ("BUY", "SELL")
+                  and s.get("confidence", 0) >= engine.min_confidence]
+
+    # Store the full snapshot (current scan replaces previous — always fresh)
+    snapshot = snapshot[:MAX_SIGNALS]
+    kv_set("signals:latest",  snapshot, ex=86400)
     kv_set("scanner:last_run", now,      ex=86400)
 
     logger.info(
-        f"Scan done — {len(new_signals)} new signal(s), "
-        f"{len(combined)} total in KV."
+        f"Scan done — {len(snapshot)} assets in snapshot, "
+        f"{len(actionable)} actionable BUY/SELL."
     )
 
 
