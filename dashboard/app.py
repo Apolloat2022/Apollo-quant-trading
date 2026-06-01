@@ -155,9 +155,10 @@ _PRIVACY_BODY = """
 
 @app.route("/")
 def index():
+    from auth import CLERK_PUBLISHABLE_KEY   # already cleaned of BOM/quotes
     return render_template(
         "dashboard.html",
-        clerk_pk=os.getenv("CLERK_PUBLISHABLE_KEY", ""),
+        clerk_pk=CLERK_PUBLISHABLE_KEY,
     )
 
 
@@ -389,7 +390,7 @@ def _get_clerk_email(user_id: str) -> str:
         import requests as _req
         r = _req.get(
             f"https://api.clerk.dev/v1/users/{user_id}",
-            headers={"Authorization": f"Bearer {os.environ.get('CLERK_SECRET_KEY', '')}"},
+            headers={"Authorization": f"Bearer {__import__('auth').CLERK_SECRET_KEY}"},
             timeout=5,
         )
         if r.ok:

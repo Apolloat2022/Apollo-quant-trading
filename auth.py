@@ -11,8 +11,12 @@ from flask import jsonify, request
 
 from kv_store import kv_get, kv_set
 
-CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
-CLERK_SECRET_KEY      = os.environ.get("CLERK_SECRET_KEY", "")
+def _clean(v: str) -> str:
+    """Strip whitespace and any stray BOM that env tooling may prepend."""
+    return (v or "").strip().lstrip("﻿").strip().strip('"').strip("'")
+
+CLERK_PUBLISHABLE_KEY = _clean(os.environ.get("CLERK_PUBLISHABLE_KEY", ""))
+CLERK_SECRET_KEY      = _clean(os.environ.get("CLERK_SECRET_KEY", ""))
 TRIAL_DAYS            = 7
 _DEV_MODE             = not CLERK_PUBLISHABLE_KEY   # skip auth when no keys configured
 
