@@ -319,14 +319,116 @@ def volume_price_strategy(df: pd.DataFrame, symbol: str = "") -> Optional[Signal
 
 
 # ──────────────────────────────────────────────────────────
-# 5. COMBINED STRATEGY
+# 5. TECHNICAL STRATEGY (RSI + MACD + ADX, trend-directional)
 # ──────────────────────────────────────────────────────────
 
+def _rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    delta = close.diff()
+    gain  = delta.clip(lower=0).ewm(alpha=1 / period, adjust=False).mean()
+    loss  = (-delta.clip(upper=0)).ewm(alpha=1 / period, adjust=False).mean()
+    rs    = gain / (loss + 1e-9)
+    return 100 - 100 / (1 + rs)
+
+
+def _macd(close: pd.Series):
+    ema12  = close.ewm(span=12, adjust=False).mean()
+    ema26  = close.ewm(span=26, adjust=False).mean()
+    macd   = ema12 - ema26
+    signal = macd.ewm(span=9, adjust=False).mean()
+    return macd, signal, (macd - signal)
+
+
+def _adx(df: pd.DataFrame, period: int = 14):
+    """Returns (adx, plus_di, minus_di) using Wilder's smoothing."""
+    high, low, close = df["high"], df["low"], df["close"]
+    up   = high.diff()
+    down = -low.diff()
+    plus_dm  = np.where((up > down) & (up > 0), up, 0.0)
+    minus_dm = np.where((down > up) & (down > 0), down, 0.0)
+    tr = pd.concat([(high - low),
+                    (high - close.shift()).abs(),
+                    (low - close.shift()).abs()], axis=1).max(axis=1)
+    atr = tr.ewm(alpha=1 / period, adjust=False).mean()
+    plus_di  = 100 * pd.Series(plus_dm, index=df.index).ewm(alpha=1 / period, adjust=False).mean()  / (atr + 1e-9)
+    minus_di = 100 * pd.Series(minus_dm, index=df.index).ewm(alpha=1 / period, adjust=False).mean() / (atr + 1e-9)
+    dx  = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
+    adx = dx.ewm(alpha=1 / period, adjust=False).mean()
+    return adx, plus_di, minus_di
+
+
+def technical_strategy(df: pd.DataFrame, symbol: str = "") -> Optional[Signal]:
+    """
+    Classic trend/momentum panel: RSI(14) + MACD(12,26,9) + ADX(14)+DI.
+    Direction is driven by MACD and +DI/-DI (trend), confirmed by RSI.
+    Confidence is scaled by ADX (trend strength), so strong trends produce
+    decisive BUY/SELL even when price is oversold/overbought.
+    """
+    try:
+        if len(df) < 40:
+            return None
+        close = df["close"]
+        rsi              = _rsi(close).iloc[-1]
+        macd, sig, hist  = _macd(close)
+        macd_l, sig_l, h = macd.iloc[-1], sig.iloc[-1], hist.iloc[-1]
+        adx_s, pdi, mdi  = _adx(df)
+        adx, p_di, m_di  = adx_s.iloc[-1], pdi.iloc[-1], mdi.iloc[-1]
+
+        bull = bear = 0
+        # MACD (trend)
+        if macd_l > sig_l and h > 0:   bull += 1
+        elif macd_l < sig_l and h < 0: bear += 1
+        # Directional movement (trend)
+        if p_di > m_di:  bull += 1
+        else:            bear += 1
+        # RSI momentum confirmation
+        if rsi >= 55:   bull += 1
+        elif rsi <= 45: bear += 1
+
+        net = bull - bear
+        # Trend strength: ADX>25 strong, <20 weak. Scale confidence 0.1–1.0
+        adx_factor = max(0.1, min(adx / 40.0, 1.0))
+        confidence = min(abs(net) / 3.0 + adx_factor * 0.4, 1.0)
+
+        if net > 0:
+            signal = "BUY"
+        elif net < 0:
+            signal = "SELL"
+        else:
+            signal = "HOLD"
+            confidence = round(adx_factor * 0.3, 4)
+
+        return Signal(
+            symbol=symbol,
+            signal=signal,
+            confidence=round(confidence, 4),
+            strategy="Technical",
+            price=round(float(close.iloc[-1]), 6),
+            details={
+                "rsi":      round(float(rsi), 2),
+                "macd":     round(float(macd_l), 4),
+                "macd_sig": round(float(sig_l), 4),
+                "adx":      round(float(adx), 2),
+                "plus_di":  round(float(p_di), 2),
+                "minus_di": round(float(m_di), 2),
+            },
+        )
+    except Exception as exc:
+        logger.error(f"Technical strategy error for {symbol}: {exc}")
+        return None
+
+
+# ──────────────────────────────────────────────────────────
+# 6. COMBINED STRATEGY
+# ──────────────────────────────────────────────────────────
+
+# Trend-weighted ensemble: trend/momentum strategies dominate; mean-reversion
+# is down-weighted so oversold readings don't cancel a valid downtrend SELL.
 _WEIGHTS = {
-    "Momentum":      0.30,
-    "Ichimoku":      0.20,
-    "MeanReversion": 0.20,
-    "VolumePrice":   0.30,
+    "Technical":     0.30,   # RSI + MACD + ADX (trend)
+    "Momentum":      0.25,
+    "Ichimoku":      0.20,   # trend (cloud)
+    "VolumePrice":   0.15,
+    "MeanReversion": 0.10,   # counter-trend — reduced influence
 }
 
 _SIGNAL_SCORE = {"BUY": 1.0, "HOLD": 0.0, "SELL": -1.0}
@@ -349,6 +451,7 @@ def combined_strategy(df: pd.DataFrame, symbol: str = "") -> Optional[Signal]:
     """
     try:
         sub_signals = {
+            "Technical":     technical_strategy(df, symbol),
             "Momentum":      momentum_strategy(df, symbol),
             "Ichimoku":      ichimoku_strategy(df, symbol),
             "MeanReversion": mean_reversion_strategy(df, symbol),
