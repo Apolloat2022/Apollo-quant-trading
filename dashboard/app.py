@@ -358,8 +358,9 @@ def _trigger_gh_backtest(job_id: str) -> bool:
     """Trigger the backtest workflow via GitHub API."""
     try:
         import requests as _req
-        token = os.environ.get("GITHUB_PAT", "")
-        repo  = os.environ.get("GITHUB_REPO", "Apolloat2022/Apollo-quant-trading")
+        _clean = lambda v: (v or "").strip().lstrip("﻿").strip().strip('"').strip("'")
+        token = _clean(os.environ.get("GITHUB_PAT", ""))
+        repo  = _clean(os.environ.get("GITHUB_REPO", "Apolloat2022/Apollo-quant-trading"))
         if not token:
             logger.warning("GITHUB_PAT not set — cannot trigger workflow.")
             return False

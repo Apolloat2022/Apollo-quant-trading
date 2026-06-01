@@ -6,11 +6,16 @@ import os
 
 import stripe
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
-PRICE_ID       = os.environ.get("STRIPE_PRICE_ID", "")
-WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-BASE_URL       = os.environ.get("BASE_URL", "https://apollo-quant-trading.vercel.app")
+def _clean(v: str) -> str:
+    """Strip whitespace, stray BOM, and quotes that env tooling may add."""
+    return (v or "").strip().lstrip("﻿").strip().strip('"').strip("'")
+
+stripe.api_key = _clean(os.environ.get("STRIPE_SECRET_KEY", ""))
+
+PRICE_ID       = _clean(os.environ.get("STRIPE_PRICE_ID", ""))
+WEBHOOK_SECRET = _clean(os.environ.get("STRIPE_WEBHOOK_SECRET", ""))
+BASE_URL       = _clean(os.environ.get("BASE_URL", "https://quant.apollotechnologiesus.com"))
 
 
 def create_checkout_session(user_id: str, user_email: str = "") -> str:
