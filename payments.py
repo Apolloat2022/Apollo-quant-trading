@@ -30,6 +30,7 @@ def create_checkout_session(user_id: str, user_email: str = "") -> str:
     """Create a Stripe Checkout session and return the redirect URL."""
     kwargs: dict = dict(
         mode="subscription",
+        payment_method_types=["card"],
         line_items=[{"price": PRICE_ID, "quantity": 1}],
         success_url=f"{BASE_URL}/?subscribed=true",
         cancel_url=f"{BASE_URL}/",
