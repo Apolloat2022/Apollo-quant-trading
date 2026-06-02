@@ -16,6 +16,14 @@ stripe.api_key = _clean(os.environ.get("STRIPE_SECRET_KEY", ""))
 PRICE_ID       = _clean(os.environ.get("STRIPE_PRICE_ID", ""))
 WEBHOOK_SECRET = _clean(os.environ.get("STRIPE_WEBHOOK_SECRET", ""))
 BASE_URL       = _clean(os.environ.get("BASE_URL", "https://apollotechnologiesus.com/quant-trading"))
+# Target account for Organization API keys — sent as the Stripe-Context header.
+# Leave unset when using a standard account-scoped key (then no context is sent).
+STRIPE_ACCOUNT = _clean(os.environ.get("STRIPE_ACCOUNT", ""))
+
+
+def _ctx() -> dict:
+    """Per-request options: attach Stripe-Context when an org key + account are set."""
+    return {"stripe_context": STRIPE_ACCOUNT} if STRIPE_ACCOUNT else {}
 
 
 def create_checkout_session(user_id: str, user_email: str = "") -> str:
@@ -30,7 +38,7 @@ def create_checkout_session(user_id: str, user_email: str = "") -> str:
     )
     if user_email:
         kwargs["customer_email"] = user_email
-    session = stripe.checkout.Session.create(**kwargs)
+    session = stripe.checkout.Session.create(**kwargs, **_ctx())
     return session.url
 
 
@@ -39,6 +47,7 @@ def create_portal_session(customer_id: str) -> str:
     session = stripe.billing_portal.Session.create(
         customer=customer_id,
         return_url=BASE_URL,
+        **_ctx(),
     )
     return session.url
 
