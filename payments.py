@@ -15,7 +15,7 @@ stripe.api_key = _clean(os.environ.get("STRIPE_SECRET_KEY", ""))
 
 PRICE_ID       = _clean(os.environ.get("STRIPE_PRICE_ID", ""))
 WEBHOOK_SECRET = _clean(os.environ.get("STRIPE_WEBHOOK_SECRET", ""))
-BASE_URL       = _clean(os.environ.get("BASE_URL", "https://quant.apollotechnologiesus.com"))
+BASE_URL       = _clean(os.environ.get("BASE_URL", "https://apollotechnologiesus.com/quant-trading"))
 
 
 def create_checkout_session(user_id: str, user_email: str = "") -> str:

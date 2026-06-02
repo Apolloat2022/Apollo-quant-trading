@@ -23,6 +23,30 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, template_folder="templates")
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "quant-trading-secret-2024")
 
+# Served as a Vercel Multi Zone under the /quant-trading subfolder of
+# apollotechnologiesus.com. The main site forwards /quant-trading/... here, so
+# strip that prefix into SCRIPT_NAME — routes stay defined at root and match.
+# Conditional on the prefix being present, so direct calls (e.g. the Stripe
+# webhook hitting the raw deployment URL) keep working unprefixed.
+URL_PREFIX = os.environ.get("URL_PREFIX", "/quant-trading").rstrip("/")
+
+
+class _PrefixMiddleware:
+    def __init__(self, wsgi_app, prefix: str):
+        self.wsgi_app = wsgi_app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO", "")
+        if self.prefix and path.startswith(self.prefix):
+            environ["SCRIPT_NAME"] = environ.get("SCRIPT_NAME", "") + self.prefix
+            environ["PATH_INFO"] = path[len(self.prefix):] or "/"
+        return self.wsgi_app(environ, start_response)
+
+
+if URL_PREFIX:
+    app.wsgi_app = _PrefixMiddleware(app.wsgi_app, URL_PREFIX)
+
 # ── In-memory fallback for local dev (no KV) ──────────────
 _signals_store: list[dict] = []
 _lock = threading.Lock()
@@ -77,8 +101,8 @@ _LEGAL_PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <a href="/">⚡ Apollo Quant Trading</a>
-  <a href="/" class="back">← Back</a>
+  <a href="{{ prefix }}/">⚡ Apollo Quant Trading</a>
+  <a href="{{ prefix }}/" class="back">← Back</a>
 </header>
 <main>
   <h1>{{ title }}</h1>
@@ -159,17 +183,18 @@ def index():
     return render_template(
         "dashboard.html",
         clerk_pk=CLERK_PUBLISHABLE_KEY,
+        url_prefix=URL_PREFIX,
     )
 
 
 @app.route("/terms")
 def terms():
-    return render_template_string(_LEGAL_PAGE, title="Terms of Service", body=_TERMS_BODY)
+    return render_template_string(_LEGAL_PAGE, title="Terms of Service", body=_TERMS_BODY, prefix=URL_PREFIX)
 
 
 @app.route("/privacy")
 def privacy():
-    return render_template_string(_LEGAL_PAGE, title="Privacy Policy", body=_PRIVACY_BODY)
+    return render_template_string(_LEGAL_PAGE, title="Privacy Policy", body=_PRIVACY_BODY, prefix=URL_PREFIX)
 
 
 @app.route("/api/add_signal", methods=["POST"])
