@@ -704,12 +704,18 @@
 
   // ── Auth actions ──
   async function subscribe() {
-    try { const { url } = await (await fetch(BASE + '/api/subscribe', { method:'POST', headers: await authHeaders() })).json();
-      if (url && url !== '/') window.location.href = url; } catch(e) { alert('Error: ' + e.message); }
+    try {
+      const data = await (await fetch(BASE + '/api/subscribe', { method:'POST', headers: await authHeaders() })).json();
+      if (data.error) { alert('Subscribe error: ' + data.error); return; }
+      if (data.url && data.url !== '/') window.location.href = data.url;
+    } catch(e) { alert('Error: ' + e.message); }
   }
   async function manageSubscription() {
-    try { const { url } = await (await fetch(BASE + '/api/portal', { method:'POST', headers: await authHeaders() })).json();
-      if (url && url !== '/') window.location.href = url; } catch(e) { alert('Error: ' + e.message); }
+    try {
+      const data = await (await fetch(BASE + '/api/portal', { method:'POST', headers: await authHeaders() })).json();
+      if (data.error) { alert('Manage error: ' + data.error); return; }
+      if (data.url && data.url !== '/') window.location.href = data.url;
+    } catch(e) { alert('Error: ' + e.message); }
   }
   async function signOut() { if (clerkInstance) await clerkInstance.signOut(); window.location.reload(); }
   function updateSymbolHint() {
