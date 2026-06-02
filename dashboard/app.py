@@ -254,7 +254,11 @@ def api_subscribe():
 
     # Try to get email from Clerk API
     email = _get_clerk_email(user_id)
-    url = create_checkout_session(user_id, email)
+    try:
+        url = create_checkout_session(user_id, email)
+    except Exception as exc:
+        logger.exception("Stripe checkout creation failed")
+        return jsonify({"error": f"Checkout failed: {exc}"}), 500
     return jsonify({"url": url})
 
 
@@ -280,7 +284,11 @@ def api_portal():
     if not customer_id:
         return jsonify({"error": "No active subscription"}), 400
 
-    return jsonify({"url": create_portal_session(customer_id)})
+    try:
+        return jsonify({"url": create_portal_session(customer_id)})
+    except Exception as exc:
+        logger.exception("Stripe portal creation failed")
+        return jsonify({"error": f"Portal failed: {exc}"}), 500
 
 
 @app.route("/api/webhook", methods=["POST"])
