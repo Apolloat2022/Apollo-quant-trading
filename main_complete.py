@@ -169,8 +169,13 @@ def mode_scan(args) -> None:
             # Push signals to dashboard
             try:
                 import requests as _requests
+                _scanner_secret = os.environ.get("SCANNER_SECRET", "").strip()
+                _headers = {"X-Scanner-Secret": _scanner_secret} if _scanner_secret else {}
                 for s in signals:
-                    _requests.post("http://127.0.0.1:5000/api/add_signal", json=s, timeout=2)
+                    _requests.post(
+                        "http://127.0.0.1:5000/api/add_signal",
+                        json=s, headers=_headers, timeout=2,
+                    )
             except Exception:
                 pass  # Dashboard may not be running — that's fine
 

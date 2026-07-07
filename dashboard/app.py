@@ -197,9 +197,28 @@ def privacy():
     return render_template_string(_LEGAL_PAGE, title="Privacy Policy", body=_PRIVACY_BODY, prefix=URL_PREFIX)
 
 
+def _scanner_authorized() -> bool:
+    """
+    Gate signal ingestion. The scanner authenticates with a shared secret
+    (X-Scanner-Secret header matching the SCANNER_SECRET env var). Loopback
+    requests are also allowed so the local dev flow (main_complete.py posting
+    to 127.0.0.1) works without configuration. Without either, ingestion is
+    rejected — otherwise anyone could inject arbitrary signals to users.
+    """
+    secret = os.getenv("SCANNER_SECRET", "").strip()
+    if secret:
+        import hmac
+        provided = request.headers.get("X-Scanner-Secret", "")
+        if hmac.compare_digest(provided, secret):
+            return True
+    return request.remote_addr in ("127.0.0.1", "::1", "localhost")
+
+
 @app.route("/api/add_signal", methods=["POST"])
 def api_add_signal():
-    """Receive a signal from the local scanner process."""
+    """Receive a signal from the trusted scanner process."""
+    if not _scanner_authorized():
+        return jsonify({"error": "Unauthorized"}), 401
     try:
         signal = request.get_json(force=True) or {}
         if signal:
@@ -423,7 +442,7 @@ def _get_clerk_email(user_id: str) -> str:
     try:
         import requests as _req
         r = _req.get(
-            f"https://api.clerk.dev/v1/users/{user_id}",
+            f"https://api.clerk.com/v1/users/{user_id}",
             headers={"Authorization": f"Bearer {__import__('auth').CLERK_SECRET_KEY}"},
             timeout=5,
         )

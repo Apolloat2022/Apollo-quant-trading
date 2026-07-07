@@ -18,7 +18,15 @@ def _clean(v: str) -> str:
 CLERK_PUBLISHABLE_KEY = _clean(os.environ.get("CLERK_PUBLISHABLE_KEY", ""))
 CLERK_SECRET_KEY      = _clean(os.environ.get("CLERK_SECRET_KEY", ""))
 TRIAL_DAYS            = 7
-_DEV_MODE             = not CLERK_PUBLISHABLE_KEY   # skip auth when no keys configured
+
+# Dev mode must be opted into EXPLICITLY. It must never be inferred from a
+# missing key, or a production deploy that forgets to set CLERK_PUBLISHABLE_KEY
+# would silently disable all authentication (fail-open). Require DEV_MODE=true
+# AND the absence of Clerk keys so it can't be turned on in a real deployment.
+_DEV_MODE = (
+    _clean(os.environ.get("DEV_MODE", "")).lower() in ("1", "true", "yes")
+    and not CLERK_PUBLISHABLE_KEY
+)
 
 
 def _jwks_url() -> str:
@@ -27,6 +35,11 @@ def _jwks_url() -> str:
         encoded = CLERK_PUBLISHABLE_KEY.split("_", 2)[-1]
         encoded += "=" * (4 - len(encoded) % 4)
         domain = base64.b64decode(encoded).decode("utf-8").rstrip("$")
+        # The publishable key encodes a bare domain (no scheme); PyJWKClient
+        # requires an absolute https:// URL or it raises MissingSchema and the
+        # entire primary signature-verification path silently falls through.
+        if not domain.startswith(("http://", "https://")):
+            domain = f"https://{domain}"
         return f"{domain}/.well-known/jwks.json"
     except Exception:
         return ""
@@ -63,18 +76,10 @@ def verify_token(token: str) -> str | None:
     except Exception:
         pass
 
-    # Fallback 2: decode without verification — trust if issuer is Clerk
-    # (acceptable for MVP: signals are read-only, Stripe handles payments)
-    try:
-        import jwt as _jwt
-        claims  = _jwt.decode(token, options={"verify_signature": False})
-        user_id = claims.get("sub")
-        issuer  = claims.get("iss", "")
-        if user_id and "clerk" in issuer.lower():
-            return user_id
-    except Exception:
-        pass
-
+    # No trust path that skips signature verification. A previous fallback here
+    # accepted unsigned tokens whose `iss` merely contained "clerk", which let
+    # anyone forge a session for any user. A token is only valid if it passed
+    # JWKS signature verification or was confirmed live against the Clerk API.
     return None
 
 
