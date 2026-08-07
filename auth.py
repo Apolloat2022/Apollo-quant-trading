@@ -3,6 +3,7 @@ Clerk JWT verification and user trial/subscription management.
 """
 
 import base64
+import logging
 import os
 import time
 from functools import wraps
@@ -10,6 +11,8 @@ from functools import wraps
 from flask import jsonify, request
 
 from kv_store import kv_get, kv_set
+
+logger = logging.getLogger(__name__)
 
 def _clean(v: str) -> str:
     """Strip whitespace and any stray BOM that env tooling may prepend."""
@@ -20,14 +23,21 @@ CLERK_SECRET_KEY      = _clean(os.environ.get("CLERK_SECRET_KEY", ""))
 TRIAL_DAYS            = 7
 
 # Accounts with unrestricted access — no trial clock, no subscription required.
-# Comma-separated in ADMIN_EMAILS; the platform owner is the built-in default so
-# admin access survives a deploy that forgets to set the variable.
-_DEFAULT_ADMIN_EMAILS = "revanaglobal@gmail.com"
-ADMIN_EMAILS = {
-    e.strip().lower()
-    for e in _clean(os.environ.get("ADMIN_EMAILS", "") or _DEFAULT_ADMIN_EMAILS).split(",")
-    if e.strip()
-}
+# Comma-separated in ADMIN_EMAILS / ADMIN_USER_IDS; the platform owner is the
+# built-in default so admin access survives a deploy that misses the variables.
+#
+# Matching by Clerk user_id is the primary path: the id comes straight from the
+# verified session token, so it keeps working even when CLERK_SECRET_KEY is
+# stale or absent. Email matching needs a Clerk API call and is the fallback.
+_DEFAULT_ADMIN_EMAILS   = "revanaglobal@gmail.com"
+_DEFAULT_ADMIN_USER_IDS = "user_3EXZZdHiocvW81TfSXjwqSdvFnC"  # revanaglobal@gmail.com
+
+def _csv_set(env_name: str, default: str, lower: bool = False) -> set:
+    raw = _clean(os.environ.get(env_name, "")) or default
+    return {(v.strip().lower() if lower else v.strip()) for v in raw.split(",") if v.strip()}
+
+ADMIN_EMAILS   = _csv_set("ADMIN_EMAILS", _DEFAULT_ADMIN_EMAILS, lower=True)
+ADMIN_USER_IDS = _csv_set("ADMIN_USER_IDS", _DEFAULT_ADMIN_USER_IDS)
 
 # Dev mode must be opted into EXPLICITLY. It must never be inferred from a
 # missing key, or a production deploy that forgets to set CLERK_PUBLISHABLE_KEY
@@ -112,6 +122,7 @@ def _init_user(user_id: str) -> dict:
 def _fetch_clerk_email(user_id: str) -> str:
     """Look up the user's primary email address via the Clerk API."""
     if not CLERK_SECRET_KEY:
+        logger.warning("Clerk email lookup skipped: CLERK_SECRET_KEY is not set")
         return ""
     try:
         import requests as _req
@@ -121,6 +132,9 @@ def _fetch_clerk_email(user_id: str) -> str:
             timeout=5,
         )
         if not r.ok:
+            # Usually a stale or rotated secret key. Left silent this would look
+            # exactly like "user is not an admin", so say it out loud.
+            logger.warning(f"Clerk email lookup for {user_id} failed: HTTP {r.status_code}")
             return ""
         body    = r.json()
         emails  = body.get("email_addresses") or []
@@ -129,7 +143,8 @@ def _fetch_clerk_email(user_id: str) -> str:
             if primary and e.get("id") == primary:
                 return e.get("email_address", "")
         return emails[0].get("email_address", "") if emails else ""
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"Clerk email lookup for {user_id} errored: {exc}")
         return ""
 
 
@@ -158,7 +173,9 @@ def get_user_email(user_id: str) -> str:
 
 
 def is_admin(user_id: str) -> bool:
-    """True when the user's email is on the admin list."""
+    """True when the user's Clerk id or email is on the admin list."""
+    if user_id in ADMIN_USER_IDS:
+        return True
     if not ADMIN_EMAILS:
         return False
     return get_user_email(user_id).lower() in ADMIN_EMAILS
