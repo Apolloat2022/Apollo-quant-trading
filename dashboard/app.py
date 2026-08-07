@@ -239,7 +239,7 @@ def api_auth_status():
 
     if _DEV_MODE:
         return jsonify({
-            "has_access": True, "subscribed": False,
+            "has_access": True, "admin": True, "subscribed": False,
             "trial_active": True, "trial_days_left": 7.0,
         })
 
@@ -438,21 +438,9 @@ def _trigger_gh_backtest(job_id: str) -> bool:
 # ──────────────────────────────────────────────────────────
 
 def _get_clerk_email(user_id: str) -> str:
-    """Fetch the user's primary email from the Clerk API."""
-    try:
-        import requests as _req
-        r = _req.get(
-            f"https://api.clerk.com/v1/users/{user_id}",
-            headers={"Authorization": f"Bearer {__import__('auth').CLERK_SECRET_KEY}"},
-            timeout=5,
-        )
-        if r.ok:
-            emails = r.json().get("email_addresses", [])
-            if emails:
-                return emails[0].get("email_address", "")
-    except Exception:
-        pass
-    return ""
+    """Fetch the user's primary email (cached lookup lives in auth)."""
+    from auth import get_user_email
+    return get_user_email(user_id)
 
 
 def run_dashboard(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:

@@ -237,6 +237,7 @@
     #trial-info.active { background: rgba(63,185,80,.1); color: var(--green); border: 1px solid rgba(63,185,80,.3); }
     #trial-info.expiring { background: rgba(210,153,34,.1); color: var(--yellow); border: 1px solid rgba(210,153,34,.3); }
     #trial-info.subscribed { background: rgba(88,166,255,.1); color: var(--blue); border: 1px solid rgba(88,166,255,.2); }
+    #trial-info.admin { background: rgba(163,113,247,.12); color: #a371f7; border: 1px solid rgba(163,113,247,.3); }
     .btn-sm { font-size: 0.76rem; padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; transition: opacity .2s; }
     .btn-sm:hover { opacity: .85; }
     #btn-subscribe { background: var(--blue); color: #fff; display: none; }
@@ -571,7 +572,10 @@
 
     const info = document.getElementById('trial-info');
     info.style.display = 'inline-block';
-    if (status.subscribed) {
+    if (status.admin) {
+      info.textContent = '★ Admin'; info.className = 'admin';
+      if (status.subscribed) document.getElementById('btn-manage').style.display = 'inline-block';
+    } else if (status.subscribed) {
       info.textContent = '✓ Subscribed'; info.className = 'subscribed';
       document.getElementById('btn-manage').style.display = 'inline-block';
     } else if (status.trial_active) {

@@ -19,6 +19,16 @@ CLERK_PUBLISHABLE_KEY = _clean(os.environ.get("CLERK_PUBLISHABLE_KEY", ""))
 CLERK_SECRET_KEY      = _clean(os.environ.get("CLERK_SECRET_KEY", ""))
 TRIAL_DAYS            = 7
 
+# Accounts with unrestricted access — no trial clock, no subscription required.
+# Comma-separated in ADMIN_EMAILS; the platform owner is the built-in default so
+# admin access survives a deploy that forgets to set the variable.
+_DEFAULT_ADMIN_EMAILS = "revanaglobal@gmail.com"
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in _clean(os.environ.get("ADMIN_EMAILS", "") or _DEFAULT_ADMIN_EMAILS).split(",")
+    if e.strip()
+}
+
 # Dev mode must be opted into EXPLICITLY. It must never be inferred from a
 # missing key, or a production deploy that forgets to set CLERK_PUBLISHABLE_KEY
 # would silently disable all authentication (fail-open). Require DEV_MODE=true
@@ -99,14 +109,71 @@ def _init_user(user_id: str) -> dict:
     return data
 
 
+def _fetch_clerk_email(user_id: str) -> str:
+    """Look up the user's primary email address via the Clerk API."""
+    if not CLERK_SECRET_KEY:
+        return ""
+    try:
+        import requests as _req
+        r = _req.get(
+            f"https://api.clerk.com/v1/users/{user_id}",
+            headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
+            timeout=5,
+        )
+        if not r.ok:
+            return ""
+        body    = r.json()
+        emails  = body.get("email_addresses") or []
+        primary = body.get("primary_email_address_id")
+        for e in emails:
+            if primary and e.get("id") == primary:
+                return e.get("email_address", "")
+        return emails[0].get("email_address", "") if emails else ""
+    except Exception:
+        return ""
+
+
+# Clerk lookups are a network hop, so cache per process as well as in KV.
+_email_cache: dict[str, str] = {}
+
+
+def get_user_email(user_id: str) -> str:
+    """Return the user's email, cached in KV and in-process."""
+    if user_id in _email_cache:
+        return _email_cache[user_id]
+
+    key   = _user_key(user_id)
+    data  = kv_get(key) or {}
+    email = data.get("email") or ""
+
+    if not email:
+        email = _fetch_clerk_email(user_id)
+        if email:
+            data["email"] = email
+            kv_set(key, data, ex=86400 * 400)
+
+    if email:
+        _email_cache[user_id] = email
+    return email
+
+
+def is_admin(user_id: str) -> bool:
+    """True when the user's email is on the admin list."""
+    if not ADMIN_EMAILS:
+        return False
+    return get_user_email(user_id).lower() in ADMIN_EMAILS
+
+
 def get_user_access(user_id: str) -> dict:
     """Return trial/subscription status for a user."""
     data    = _init_user(user_id)
     elapsed = (time.time() - data.get("trial_start", time.time())) / 86400
     trial   = elapsed < TRIAL_DAYS
     subbed  = data.get("subscribed", False)
+    admin   = is_admin(user_id)
     return {
-        "has_access":       trial or subbed,
+        "has_access":       admin or trial or subbed,
+        "admin":            admin,
         "subscribed":       subbed,
         "trial_active":     trial,
         "trial_days_left":  round(max(0.0, TRIAL_DAYS - elapsed), 1),
@@ -123,6 +190,7 @@ def require_access(f):
         # Dev mode — no Clerk keys configured (local dev without .env keys)
         if _DEV_MODE:
             request.user_id = "dev_user"
+            request.is_admin = True
             return f(*args, **kwargs)
 
         auth = request.headers.get("Authorization", "")
@@ -137,6 +205,33 @@ def require_access(f):
         if not access["has_access"]:
             return jsonify({"error": "Subscription required", "paywall": True}), 402
 
-        request.user_id = user_id
+        request.user_id  = user_id
+        request.is_admin = access["admin"]
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_admin(f):
+    """Require a valid Clerk session belonging to an admin account."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if _DEV_MODE:
+            request.user_id  = "dev_user"
+            request.is_admin = True
+            return f(*args, **kwargs)
+
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return jsonify({"error": "Unauthorized"}), 401
+
+        user_id = verify_token(auth[7:])
+        if not user_id:
+            return jsonify({"error": "Invalid token"}), 401
+
+        if not is_admin(user_id):
+            return jsonify({"error": "Admin access required"}), 403
+
+        request.user_id  = user_id
+        request.is_admin = True
         return f(*args, **kwargs)
     return decorated
