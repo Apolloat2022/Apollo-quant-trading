@@ -5,11 +5,18 @@ Telegram, Email, SMS (Twilio), Webhook, and Console alerts.
 
 import logging
 import os
+import sys
 import smtplib
 import time
 from email.mime.text import MIMEText
 from typing import Optional
 import requests
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +57,15 @@ def _format_alert(signal: dict, pos_size: Optional[dict] = None) -> str:
         f"   Price     : {price:.6g}",
         f"   Confidence: {conf:.1%}",
     ]
+
+    kf = signal.get("details", {}).get("kronos_forecast")
+    if kf:
+        lines += [
+            f"   🔮 Kronos AI : {kf.get('raw_recommendation', 'N/A')} ({kf.get('bias', '')})",
+            f"   Target High : {kf.get('target_high', 'N/A')}",
+            f"   Target Low  : {kf.get('target_low', 'N/A')}",
+            f"   Expected Δ  : {kf.get('pct_change', 0):+.2f}%",
+        ]
 
     if cash_note:
         lines.append(cash_note)

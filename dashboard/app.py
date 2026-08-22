@@ -9,6 +9,7 @@ import sys
 import threading
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import pandas as pd
 
 _TZ = ZoneInfo("America/Chicago")
 
@@ -403,6 +404,79 @@ def _create_backtest_job(req, mode: str):
         return jsonify({"job_id": job_id, "status": job["status"]})
     except Exception as exc:
         logger.error(f"Backtest job creation error: {exc}")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/kronos/forecast", methods=["GET", "POST"])
+def api_kronos_forecast():
+    """
+    Generate Kronos Foundation Model Forecast & Price Targets for any asset.
+    """
+    symbol = "NVDA"
+    try:
+        req_data = request.get_json(silent=True) or {}
+        symbol = request.args.get("symbol") or req_data.get("symbol", "NVDA")
+        asset_type = request.args.get("asset_type") or req_data.get("asset_type")
+        timeframe = request.args.get("timeframe") or req_data.get("timeframe", "5m")
+        
+        # Auto-detect asset_type if not provided
+        if not asset_type:
+            if "/" in symbol or symbol.endswith("USDT") or symbol in ["BTC", "ETH", "SOL", "XRP"]:
+                asset_type = "crypto"
+            elif "=X" in symbol or (len(symbol) == 6 and any(symbol.startswith(c) for c in ["EUR", "GBP", "USD", "AUD"])):
+                asset_type = "forex"
+            else:
+                asset_type = "stock"
+
+        from data_fetcher import fetch_asset
+        from strategies.kronos_strategy import kronos_strategy
+
+        df = fetch_asset(symbol, asset_type=asset_type, timeframe=timeframe)
+        if df is None or df.empty:
+            return jsonify({"error": f"Unable to fetch market data for {symbol}"}), 400
+
+        sig = kronos_strategy(df, symbol=symbol)
+        if sig is None:
+            return jsonify({"error": f"Failed to generate Kronos forecast for {symbol}"}), 500
+
+        current_price = float(df["close"].iloc[-1])
+        details = sig.details or {}
+        
+        # Prepare historical candlestick data for chart
+        recent_df = df.tail(100)
+        history_candles = []
+        for idx, row in recent_df.iterrows():
+            ts_val = row.get("timestamps") or (str(idx) if isinstance(idx, (pd.Timestamp, str)) else str(idx))
+            history_candles.append({
+                "time": str(ts_val),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row.get("volume", 0))
+            })
+
+        return jsonify({
+            "success": True,
+            "symbol": symbol,
+            "asset_type": asset_type,
+            "timeframe": timeframe,
+            "current_price": current_price,
+            "signal": sig.signal,
+            "confidence": round(sig.confidence * 100, 1),
+            "recommendation": details.get("raw_recommendation", sig.signal),
+            "bias": details.get("bias", "Bullish" if sig.signal == "BUY" else "Bearish"),
+            "target_close": details.get("target_close", current_price),
+            "target_high": details.get("target_high", current_price * 1.02),
+            "target_low": details.get("target_low", current_price * 0.98),
+            "pct_change": details.get("pct_change", 0.0),
+            "take_profit": details.get("take_profit", current_price * 1.03),
+            "stop_loss": details.get("stop_loss", current_price * 0.98),
+            "history_candles": history_candles,
+            "timestamp": datetime.now(_TZ).isoformat()
+        })
+    except Exception as exc:
+        logger.exception(f"Kronos forecast API error for {symbol}: {exc}")
         return jsonify({"error": str(exc)}), 500
 
 

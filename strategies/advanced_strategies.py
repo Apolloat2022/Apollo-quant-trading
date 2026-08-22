@@ -421,14 +421,14 @@ def technical_strategy(df: pd.DataFrame, symbol: str = "") -> Optional[Signal]:
 # 6. COMBINED STRATEGY
 # ──────────────────────────────────────────────────────────
 
-# Trend-weighted ensemble: trend/momentum strategies dominate; mean-reversion
-# is down-weighted so oversold readings don't cancel a valid downtrend SELL.
+# Trend-weighted ensemble: Kronos AI foundation model + technical trend strategies
 _WEIGHTS = {
-    "Technical":     0.30,   # RSI + MACD + ADX (trend)
-    "Momentum":      0.25,
-    "Ichimoku":      0.20,   # trend (cloud)
-    "VolumePrice":   0.15,
-    "MeanReversion": 0.10,   # counter-trend — reduced influence
+    "KronosAI":      0.35,   # AI Foundation Model (Candlestick sequence autoregression)
+    "Technical":     0.25,   # RSI + MACD + ADX (trend)
+    "Momentum":      0.15,
+    "Ichimoku":      0.15,   # trend (cloud)
+    "VolumePrice":   0.05,
+    "MeanReversion": 0.05,   # counter-trend — reduced influence
 }
 
 _SIGNAL_SCORE = {"BUY": 1.0, "HOLD": 0.0, "SELL": -1.0}
@@ -436,7 +436,7 @@ _SIGNAL_SCORE = {"BUY": 1.0, "HOLD": 0.0, "SELL": -1.0}
 
 def combined_strategy(df: pd.DataFrame, symbol: str = "") -> Optional[Signal]:
     """
-    Weighted ensemble of all four strategies.
+    Weighted ensemble of Kronos AI foundation model and technical strategies.
 
     BUY  if weighted score > 0.3
     SELL if weighted score < -0.3
@@ -450,7 +450,15 @@ def combined_strategy(df: pd.DataFrame, symbol: str = "") -> Optional[Signal]:
         Signal or None.
     """
     try:
+        # Lazy import kronos_strategy
+        try:
+            from strategies.kronos_strategy import kronos_strategy
+            kronos_sig = kronos_strategy(df, symbol)
+        except Exception:
+            kronos_sig = None
+
         sub_signals = {
+            "KronosAI":      kronos_sig,
             "Technical":     technical_strategy(df, symbol),
             "Momentum":      momentum_strategy(df, symbol),
             "Ichimoku":      ichimoku_strategy(df, symbol),
@@ -488,16 +496,20 @@ def combined_strategy(df: pd.DataFrame, symbol: str = "") -> Optional[Signal]:
         else:
             signal = "HOLD"
 
+        details_dict = {
+            "weighted_score": round(normalized, 4),
+            "components":     components,
+        }
+        if kronos_sig and kronos_sig.details:
+            details_dict["kronos_forecast"] = kronos_sig.details
+
         return Signal(
             symbol=symbol,
             signal=signal,
             confidence=round(confidence, 4),
             strategy="Combined",
             price=round(float(df["close"].iloc[-1]), 6),
-            details={
-                "weighted_score": round(normalized, 4),
-                "components":     components,
-            },
+            details=details_dict,
         )
     except Exception as exc:
         logger.error(f"Combined strategy error for {symbol}: {exc}")

@@ -54,13 +54,19 @@ def generate_market_summary(signals: list[dict]) -> str:
     if not signals:
         return "No signals available."
 
-    lines = [f"- {s['symbol']}: {s['signal']} ({s['strategy']}, conf={s['confidence']:.2f})" for s in signals]
+    lines = []
+    for s in signals:
+        line = f"- {s['symbol']}: {s['signal']} ({s['strategy']}, conf={s['confidence']:.2f})"
+        kf = s.get("details", {}).get("kronos_forecast")
+        if kf:
+            line += f" | Kronos AI: {kf.get('raw_recommendation', 'N/A')}, Target: {kf.get('target_close')} ({kf.get('pct_change', 0):+.2f}%), Range: [{kf.get('target_low')} - {kf.get('target_high')}]"
+        lines.append(line)
     signal_text = "\n".join(lines)
 
     prompt = (
-        "You are a quantitative analyst. Given the following algorithmic trading signals, "
+        "You are a quantitative analyst. Given the following algorithmic trading signals and Kronos AI foundation model price targets, "
         "provide a concise 3-4 sentence market summary covering overall bias (bullish/bearish/mixed), "
-        "key opportunities, and any notable risks. Be factual and data-driven.\n\n"
+        "key opportunities, target price boundaries, and any notable risks. Be factual and data-driven.\n\n"
         f"Signals:\n{signal_text}"
     )
 
