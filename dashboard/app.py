@@ -394,13 +394,13 @@ def _create_backtest_job(req, mode: str):
         }
         kv_set(f"backtest:{job_id}", job, ex=3600)
 
-        triggered = _trigger_gh_backtest(job_id)
-        if not triggered:
+        err = _trigger_gh_backtest(job_id)
+        if err:
             job["status"] = "error"
-            job["error"]  = "Failed to trigger GitHub Actions — check GITHUB_PAT secret."
+            job["error"]  = err
             kv_set(f"backtest:{job_id}", job, ex=3600)
 
-        return jsonify({"job_id": job_id, "status": job["status"]})
+        return jsonify({"job_id": job_id, "status": job["status"], "error": job.get("error")})
     except Exception as exc:
         logger.error(f"Backtest job creation error: {exc}")
         return jsonify({"error": str(exc)}), 500
@@ -589,8 +589,8 @@ def api_kronos_forecast():
         return jsonify({"error": str(exc)}), 500
 
 
-def _trigger_gh_backtest(job_id: str) -> bool:
-    """Trigger the backtest workflow via GitHub API."""
+def _trigger_gh_backtest(job_id: str):
+    """Trigger the backtest workflow via GitHub API. Returns None on success, else an error string."""
     try:
         import requests as _req
         _clean = lambda v: (v or "").strip().lstrip("﻿").strip().strip('"').strip("'")
@@ -598,7 +598,7 @@ def _trigger_gh_backtest(job_id: str) -> bool:
         repo  = _clean(os.environ.get("GITHUB_REPO", "Apolloat2022/Apollo-quant-trading"))
         if not token:
             logger.warning("GITHUB_PAT not set — cannot trigger workflow.")
-            return False
+            return "GITHUB_PAT is not set on the server."
         r = _req.post(
             f"https://api.github.com/repos/{repo}/actions/workflows/backtest.yml/dispatches",
             headers={
@@ -608,12 +608,16 @@ def _trigger_gh_backtest(job_id: str) -> bool:
             json={"ref": "main", "inputs": {"job_id": job_id}},
             timeout=10,
         )
-        if not r.ok:
-            logger.error(f"GH dispatch failed: {r.status_code} {r.text}")
-        return r.ok
+        if r.ok:
+            return None
+        logger.error(f"GH dispatch failed: {r.status_code} {r.text}")
+        hint = {401: "GITHUB_PAT is invalid or expired.",
+                403: "GITHUB_PAT lacks Actions write permission.",
+                404: f"Workflow backtest.yml not found on main in {repo} (or PAT cannot see it)."}.get(r.status_code, "")
+        return f"GitHub dispatch failed ({r.status_code}). {hint}".strip()
     except Exception as exc:
         logger.error(f"GH dispatch exception: {exc}")
-        return False
+        return f"GitHub dispatch error: {exc}"
 
 
 # ──────────────────────────────────────────────────────────
